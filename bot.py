@@ -378,11 +378,9 @@ def main():
     application.add_handler(add_preset_conv)
     
     # Handler for command execution (must be after conversation handlers)
-    # Only execute command if user is not in conversation
     async def execute_command_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        # Check if user is in conversation
+        # Skip if user is in conversation
         if context.user_data.get("edit_server_id") or context.user_data.get("new_server_name") or context.user_data.get("new_preset_name"):
-            # User is in conversation, ignore command
             return
         await execute_command(update, context)
     
