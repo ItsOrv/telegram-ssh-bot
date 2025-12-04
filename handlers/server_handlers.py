@@ -91,7 +91,7 @@ async def add_server_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Get Host"""
     host = update.message.text.strip()
     
-    # Simple validation
+    # Validate host
     is_valid_ip, ip_error = validate_ip(host)
     if not is_valid_ip and (not host or len(host) > 255):
         await update.message.reply_text(
