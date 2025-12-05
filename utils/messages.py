@@ -7,7 +7,7 @@ def format_command_output(output: str, max_length: int = 4000) -> str:
     if not output:
         return "Empty output"
     
-    # Limit output length
+    # Truncate if too long
     if len(output) > max_length:
         output = output[:max_length] + "\n\n... (output truncated)"
     
