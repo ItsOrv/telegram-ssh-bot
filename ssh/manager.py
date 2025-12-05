@@ -20,7 +20,7 @@ class SSHManager:
         Connect to server
         Returns: (success, message)
         """
-        # Check existing connection
+        # Check if already connected
         if user_id in self._connections:
             return False, "You are already connected to a server. Please disconnect first."
         
