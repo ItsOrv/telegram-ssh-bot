@@ -42,7 +42,7 @@ class DatabaseManager:
             
             self._initialized = True
         except Exception as e:
-            raise RuntimeError(f"Database connection error: {str(e)}")
+            raise RuntimeError(f"Failed to connect to database: {str(e)}")
     
     @contextmanager
     def get_session(self) -> Generator[Session, None, None]:
