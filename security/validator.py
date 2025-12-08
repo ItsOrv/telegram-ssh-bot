@@ -49,7 +49,7 @@ def validate_command(command: str) -> Tuple[bool, Optional[str], Optional[str]]:
     if not command or not command.strip():
         return False, None, "Command cannot be empty"
     
-    # Length limit
+    # Check length
     if len(command) > settings.MAX_COMMAND_LENGTH:
         return False, None, f"Command length must not exceed {settings.MAX_COMMAND_LENGTH} characters"
     
