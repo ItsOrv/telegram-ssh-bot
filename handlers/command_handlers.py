@@ -91,7 +91,7 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Sanitize command
     cleaned_command = sanitize_input(command)
     
-    # Show executing message
+    # Show status
     status_msg = await update.message.reply_text("⏳ Executing command...")
     
     try:
