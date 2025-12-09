@@ -11,7 +11,7 @@ class SSHExecutor:
     @staticmethod
     def execute_command(user_id: int, command: str) -> Tuple[bool, str, str]:
         """
-        Execute command
+        Execute command on server
         Returns: (success, stdout, stderr)
         """
         ssh_client = ssh_manager.get_connection(user_id)
