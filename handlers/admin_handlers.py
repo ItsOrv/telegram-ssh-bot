@@ -15,6 +15,7 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query:
         await query.answer()
     
+    
     user_id = update.effective_user.id
     
     # Check admin access
