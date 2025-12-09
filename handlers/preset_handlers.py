@@ -80,7 +80,7 @@ async def add_preset_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     command = update.message.text.strip()
     preset_name = context.user_data.get("new_preset_name")
     
-    # Validate command
+    # Check command
     is_valid, warning, error = validate_command(command)
     
     if not is_valid:
