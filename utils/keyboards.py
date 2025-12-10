@@ -41,7 +41,7 @@ def get_servers_menu_keyboard() -> InlineKeyboardMarkup:
 
 
 def get_server_list_keyboard(servers: List[Dict], action: str = "select") -> InlineKeyboardMarkup:
-    """Server list keyboard"""
+    """Build server list keyboard"""
     keyboard = []
     for server in servers:
         server_id = server.get("id")
