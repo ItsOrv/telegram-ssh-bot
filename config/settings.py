@@ -44,7 +44,7 @@ class Settings:
     
     @classmethod
     def validate(cls) -> tuple[bool, List[str]]:
-        """Validate settings"""
+        """Check if settings are valid"""
         errors = []
         
         if not cls.TELEGRAM_TOKEN:
