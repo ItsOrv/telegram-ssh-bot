@@ -2,7 +2,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from database.connection import db_manager
-from database.models import User
+from database.models import User, Server, PresetCommand
 from config.settings import settings
 from utils.keyboards import get_admin_menu_keyboard, get_back_keyboard
 from utils.messages import get_error_message, get_success_message
@@ -104,8 +104,8 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         with db_manager.get_session() as session:
             total_users = session.query(User).count()
-            total_servers = session.query(User).join(User.servers).count()
-            total_presets = session.query(User).join(User.preset_commands).count()
+            total_servers = session.query(Server).count()
+            total_presets = session.query(PresetCommand).count()
             
             # Check public mode
             admin_user = session.query(User).filter_by(user_id=user_id).first()
