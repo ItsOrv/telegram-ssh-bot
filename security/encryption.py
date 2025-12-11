@@ -24,19 +24,13 @@ def encrypt_password(user_id: int, password: str) -> str:
         return ""
     
     user_key = derive_user_key(user_id)
-    
-    # Create AESGCM instance
     aesgcm = AESGCM(user_key)
     
-    # Generate nonce (12 bytes for GCM)
     import os
     nonce = os.urandom(12)
-    
-    # Encrypt
     password_bytes = password.encode('utf-8')
     ciphertext = aesgcm.encrypt(nonce, password_bytes, None)
     
-    # Combine nonce and ciphertext and encode to base64
     encrypted_data = nonce + ciphertext
     return base64.b64encode(encrypted_data).decode('utf-8')
 
