@@ -223,7 +223,7 @@ async def callback_query_handler(update: Update, context):
                 )
                 return
     
-    # Route callbacks
+    # Handle callbacks
     user_id = update.effective_user.id
     is_admin = settings.is_admin(user_id)
     
