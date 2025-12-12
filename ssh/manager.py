@@ -135,7 +135,7 @@ class SSHManager:
         return self._connection_info.get(user_id)
     
     def _cleanup_connection(self, user_id: int):
-        """Cleanup closed connection"""
+        """Remove closed connection"""
         try:
             if user_id in self._connections:
                 ssh_client = self._connections[user_id]
