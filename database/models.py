@@ -11,6 +11,7 @@ class User(Base):
     """User model"""
     __tablename__ = "users"
     
+    
     user_id = Column(Integer, primary_key=True, unique=True, nullable=False)
     is_admin = Column(Boolean, default=False, nullable=False)
     public_mode_enabled = Column(Boolean, default=False, nullable=False)
