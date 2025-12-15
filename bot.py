@@ -84,17 +84,12 @@ def check_rate_limit(user_id: int) -> bool:
     now = datetime.utcnow()
     minute_ago = now - timedelta(minutes=1)
     
-    # Clean old requests
-    user_requests[user_id] = [
-        req_time for req_time in user_requests[user_id]
-        if req_time > minute_ago
-    ]
+    # Remove old ones
+    user_requests[user_id] = [t for t in user_requests[user_id] if t > minute_ago]
     
-    # Check request count
     if len(user_requests[user_id]) >= settings.RATE_LIMIT_PER_MINUTE:
         return False
     
-    # Register new request
     user_requests[user_id].append(now)
     return True
 
