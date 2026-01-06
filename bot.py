@@ -2,7 +2,7 @@
 import asyncio
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from telegram import Update
 from telegram.ext import (
  Application,
@@ -10,6 +10,7 @@ from telegram.ext import (
  CallbackQueryHandler,
  MessageHandler,
  ConversationHandler,
+ ContextTypes,
  filters
 )
 from config.settings import settings
@@ -80,14 +81,14 @@ user_requests = defaultdict(list)
 
 def check_rate_limit(user_id: int) -> bool:
  """Check rate limit"""
- now = datetime.utcnow()
+ now = datetime.now(timezone.utc)
  minute_ago = now - timedelta(minutes=1)
  
  # Remove old ones
  user_requests[user_id] = [t for t in user_requests[user_id] if t > minute_ago]
  
  if len(user_requests[user_id]) >= settings.RATE_LIMIT_PER_MINUTE:
- return False
+     return False
  
  user_requests[user_id].append(now)
  return True
@@ -98,58 +99,58 @@ async def check_access(update: Update, context) -> bool:
  
  # Check rate limit
  if not check_rate_limit(user_id):
- await update.message.reply_text(
- "Rate limit exceeded. Please wait."
- )
- return False
+     await update.message.reply_text(
+         "Rate limit exceeded. Please wait."
+     )
+     return False
  
  # Check admin access
  if settings.is_admin(user_id):
- return True
+     return True
  
  # Check public mode
  try:
- with db_manager.get_session() as session:
- admin_user = session.query(User).filter_by(
- user_id=settings.ADMIN_IDS[0] if settings.ADMIN_IDS else 0
- ).first()
+     with db_manager.get_session() as session:
+         admin_user = session.query(User).filter_by(
+             user_id=settings.ADMIN_IDS[0] if settings.ADMIN_IDS else 0
+         ).first()
  
- if admin_user and admin_user.public_mode_enabled:
- return True
+         if admin_user and admin_user.public_mode_enabled:
+             return True
  except:
- pass
+     pass
  
  # In inactive mode, only admins have access
  await update.message.reply_text(
- "Bot is currently only active for admins."
+     "Bot is currently only active for admins."
  )
  return False
 
 async def start_command(update: Update, context):
  """Command /start"""
  if update.message.chat.type != "private":
- await update.message.reply_text("This bot can only be used in private chat.")
- return
+     await update.message.reply_text("This bot can only be used in private chat.")
+     return
  
  # Check access
  if not await check_access(update, context):
- return
+     return
  
  user_id = update.effective_user.id
  
  # Create or update user
  try:
- with db_manager.get_session() as session:
- user = session.query(User).filter_by(user_id=user_id).first()
- if not user:
- user = User(
- user_id=user_id,
- is_admin=settings.is_admin(user_id)
- )
- session.add(user)
- session.commit()
+     with db_manager.get_session() as session:
+         user = session.query(User).filter_by(user_id=user_id).first()
+         if not user:
+             user = User(
+                 user_id=user_id,
+                 is_admin=settings.is_admin(user_id)
+             )
+             session.add(user)
+             session.commit()
  except Exception as e:
- logger.error(f"Error creating user: {e}")
+     logger.error(f"Error creating user: {e}")
  
  welcome_message = """
 🤖 *Welcome to SSH Bot!*
@@ -169,12 +170,12 @@ To get started, use the menu below:
 async def help_command(update: Update, context):
  """Command /help"""
  if update.message.chat.type != "private":
- await update.message.reply_text("This bot can only be used in private chat.")
- return
+     await update.message.reply_text("This bot can only be used in private chat.")
+     return
  
  # Check access
  if not await check_access(update, context):
- return
+     return
  
  user_id = update.effective_user.id
  is_admin = settings.is_admin(user_id)
@@ -194,121 +195,121 @@ async def callback_query_handler(update: Update, context):
  
  # Check access (except for Main menu)
  if data not in ["menu_main", "menu_help"]:
- user_id = update.effective_user.id
- if not settings.is_admin(user_id):
- try:
- with db_manager.get_session() as session:
- admin_user = session.query(User).filter_by(
- user_id=settings.ADMIN_IDS[0] if settings.ADMIN_IDS else 0
- ).first()
+     user_id = update.effective_user.id
+     if not settings.is_admin(user_id):
+         try:
+             with db_manager.get_session() as session:
+                 admin_user = session.query(User).filter_by(
+                     user_id=settings.ADMIN_IDS[0] if settings.ADMIN_IDS else 0
+                 ).first()
  
- if not (admin_user and admin_user.public_mode_enabled):
- await query.edit_message_text(
- "Bot is currently only active for admins."
- )
- return
- except:
- await query.edit_message_text(
- "Error Check access."
- )
- return
+                 if not (admin_user and admin_user.public_mode_enabled):
+                     await query.edit_message_text(
+                         "Bot is currently only active for admins."
+                     )
+                     return
+         except:
+             await query.edit_message_text(
+                 "Error Check access."
+             )
+             return
  
  # Handle callbacks
  user_id = update.effective_user.id
  is_admin = settings.is_admin(user_id)
  
  if data == "menu_main":
- await query.edit_message_text(
- "🤖 *Main menu*\n\nSelect an option:",
- reply_markup=get_main_menu_keyboard(is_admin=is_admin),
- parse_mode="Markdown"
- )
+     await query.edit_message_text(
+         "🤖 *Main menu*\n\nSelect an option:",
+         reply_markup=get_main_menu_keyboard(is_admin=is_admin),
+         parse_mode="Markdown"
+     )
  elif data == "menu_help":
- await query.edit_message_text(
- get_help_message(),
- reply_markup=get_main_menu_keyboard(is_admin=is_admin),
- parse_mode="Markdown"
- )
+     await query.edit_message_text(
+         get_help_message(),
+         reply_markup=get_main_menu_keyboard(is_admin=is_admin),
+         parse_mode="Markdown"
+     )
  elif data == "menu_servers":
- await servers_menu(update, context)
+     await servers_menu(update, context)
  elif data == "server_add":
- await add_server_start(update, context)
+     await add_server_start(update, context)
  elif data == "server_list":
- await list_servers(update, context)
+     await list_servers(update, context)
  elif data.startswith("server_select_"):
- await server_select(update, context)
+     await server_select(update, context)
  elif data.startswith("server_edit_"):
- await server_edit(update, context)
+     await server_edit(update, context)
  # edit_field_ is managed by ConversationHandler
  elif data.startswith("server_delete_"):
- await server_delete(update, context)
+     await server_delete(update, context)
  elif data.startswith("confirm_server_delete_"):
- await server_delete_confirm(update, context)
+     await server_delete_confirm(update, context)
  elif data == "server_connect":
- await server_connect(update, context)
+     await server_connect(update, context)
  elif data.startswith("connect_to_"):
- await connect_to_server(update, context)
+     await connect_to_server(update, context)
  elif data == "server_disconnect":
- await server_disconnect(update, context)
+     await server_disconnect(update, context)
  elif data == "menu_execute":
- await execute_command_menu(update, context)
+     await execute_command_menu(update, context)
  elif data == "menu_presets":
- await presets_menu(update, context)
+     await presets_menu(update, context)
  elif data == "preset_add":
- await add_preset_start(update, context)
+     await add_preset_start(update, context)
  elif data == "preset_list":
- await list_presets(update, context)
+     await list_presets(update, context)
  elif data.startswith("preset_execute_"):
- await preset_execute(update, context)
+     await preset_execute(update, context)
  elif data.startswith("preset_delete_"):
- await preset_delete(update, context)
+     await preset_delete(update, context)
  elif data.startswith("confirm_preset_delete_"):
- await preset_delete_confirm(update, context)
+     await preset_delete_confirm(update, context)
  elif data == "admin_toggle_public":
- await toggle_public_mode(update, context)
+     await toggle_public_mode(update, context)
  elif data == "admin_stats":
- await admin_stats(update, context)
+     await admin_stats(update, context)
  elif data == "admin_menu":
- await admin_menu(update, context)
+     await admin_menu(update, context)
  elif data.startswith("cancel_"):
- await cancel(update, context)
+     await cancel(update, context)
 
 async def error_handler(update: Update, context):
  """General error handler"""
  logger.error(f"Exception while handling an update: {context.error}")
  
  if update and update.effective_message:
- try:
- await update.effective_message.reply_text(
- "An error occurred. Please try again."
- )
- except:
- pass
+     try:
+         await update.effective_message.reply_text(
+             "An error occurred. Please try again."
+         )
+     except:
+         pass
 
 async def cleanup_task(context):
  """Periodic cleanup task"""
  try:
- ssh_manager.cleanup_idle_connections()
+     ssh_manager.cleanup_idle_connections()
  except Exception as e:
- logger.error(f"Error in cleanup task: {e}")
+     logger.error(f"Error in cleanup task: {e}")
 
 def main():
  """Main function"""
  # Validate settings
  is_valid, errors = settings.validate()
  if not is_valid:
- logger.error("Error in settings:")
- for error in errors:
- logger.error(f" - {error}")
- return
+     logger.error("Error in settings:")
+     for error in errors:
+         logger.error(f" - {error}")
+     return
  
  # Initialize database
  try:
- db_manager.initialize()
- logger.info("Database initialized")
+     db_manager.initialize()
+     logger.info("Database initialized")
  except Exception as e:
- logger.error(f"Error Initialize database: {e}")
- return
+     logger.error(f"Error Initialize database: {e}")
+     return
  
  # Create Application
  application = Application.builder().token(settings.TELEGRAM_TOKEN).build()
@@ -333,6 +334,7 @@ def main():
  CallbackQueryHandler(cancel, pattern="^menu_servers$"),
  CommandHandler("cancel", cancel)
  ],
+ per_message=False,
  )
  application.add_handler(add_server_conv)
  
@@ -347,6 +349,7 @@ def main():
  CallbackQueryHandler(cancel, pattern="^server_select_"),
  CommandHandler("cancel", cancel)
  ],
+ per_message=False,
  )
  application.add_handler(edit_server_conv)
  
@@ -361,15 +364,16 @@ def main():
  CallbackQueryHandler(cancel_preset, pattern="^cancel_"),
  CallbackQueryHandler(cancel_preset, pattern="^menu_presets$")
  ],
+ per_message=False,
  )
  application.add_handler(add_preset_conv)
  
  # Handler for command execution (must be after conversation handlers)
  async def execute_command_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
- # Skip if user is in conversation
- if context.user_data.get("edit_server_id") or context.user_data.get("new_server_name") or context.user_data.get("new_preset_name"):
- return
- await execute_command(update, context)
+     # Skip if user is in conversation
+     if context.user_data.get("edit_server_id") or context.user_data.get("new_server_name") or context.user_data.get("new_preset_name"):
+         return
+     await execute_command(update, context)
  
  application.add_handler(MessageHandler(
  filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
@@ -382,12 +386,16 @@ def main():
  # Error handler
  application.add_error_handler(error_handler)
  
- # Start cleanup task
- application.job_queue.run_repeating(
- cleanup_task,
- interval=300,
- first=300
- )
+ # Start cleanup task (if job_queue is available)
+ if application.job_queue:
+     application.job_queue.run_repeating(
+         cleanup_task,
+         interval=300,
+         first=300
+     )
+     logger.info("Cleanup task scheduled")
+ else:
+     logger.warning("JobQueue not available, cleanup task disabled")
  
  # Start bot
  logger.info("🚀 bot Starting...")
