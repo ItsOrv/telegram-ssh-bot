@@ -262,17 +262,19 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
      output_text = ""
 
      if stdout:
-         # Escape HTML characters and limit length
+         # Escape HTML characters and limit length - show LAST part
          stdout_escaped = stdout.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
          if len(stdout_escaped) > 3500:
-             stdout_escaped = stdout_escaped[:3500] + "\n\n... (output truncated)"
+             # Get last 3500 characters (most recent output)
+             stdout_escaped = "... (output truncated)\n\n" + stdout_escaped[-3500:]
          output_text += f"<b>Output:</b>\n<pre><code>{stdout_escaped}</code></pre>\n\n"
 
      if stderr:
-         # Escape HTML characters and limit length
+         # Escape HTML characters and limit length - show LAST part
          stderr_escaped = stderr.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
          if len(stderr_escaped) > 3500:
-             stderr_escaped = stderr_escaped[:3500] + "\n\n... (output truncated)"
+             # Get last 3500 characters (most recent output)
+             stderr_escaped = "... (output truncated)\n\n" + stderr_escaped[-3500:]
          output_text += f"<b>Error:</b>\n<pre><code>{stderr_escaped}</code></pre>\n\n"
 
      if not stdout and not stderr:
@@ -289,13 +291,19 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
              reply_markup=get_back_keyboard("menu_main")
          )
      except Exception as html_error:
-         # If HTML fails, use plain text (no parsing)
+         # If HTML fails, use plain text (no parsing) - show LAST part
          output_text_plain = ""
          if stdout:
-             stdout_plain = stdout[:3500] + "\n\n... (truncated)" if len(stdout) > 3500 else stdout
+             if len(stdout) > 3500:
+                 stdout_plain = "... (truncated)\n\n" + stdout[-3500:]
+             else:
+                 stdout_plain = stdout
              output_text_plain += f"Output:\n{stdout_plain}\n\n"
          if stderr:
-             stderr_plain = stderr[:3500] + "\n\n... (truncated)" if len(stderr) > 3500 else stderr
+             if len(stderr) > 3500:
+                 stderr_plain = "... (truncated)\n\n" + stderr[-3500:]
+             else:
+                 stderr_plain = stderr
              output_text_plain += f"Error:\n{stderr_plain}\n\n"
          if not stdout and not stderr:
              output_text_plain = "Command executed (no output)"
