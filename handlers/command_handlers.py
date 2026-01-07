@@ -135,27 +135,22 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  else:
                      last_4_lines = ["No output yet..."]
              
-             # Format output - escape special characters for Markdown
+             # Format output - escape for HTML (safer than Markdown)
              escaped_lines = []
              for line in last_4_lines:
-                 # Escape special Markdown characters
-                 escaped_line = line.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("]", "\\]")
-                 escaped_line = escaped_line.replace("(", "\\(").replace(")", "\\)").replace("~", "\\~")
-                 escaped_line = escaped_line.replace("`", "\\`").replace(">", "\\>").replace("#", "\\#")
-                 escaped_line = escaped_line.replace("+", "\\+").replace("-", "\\-").replace("=", "\\=")
-                 escaped_line = escaped_line.replace("|", "\\|").replace("{", "\\{").replace("}", "\\}")
-                 escaped_line = escaped_line.replace(".", "\\.").replace("!", "\\!")
+                 # Escape HTML special characters only
+                 escaped_line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                  escaped_lines.append(escaped_line)
              
-             # Format output - only show "Executing..." for first 2 seconds
+             # Format output using HTML - only show "Executing..." for first 2 seconds
              if show_executing:
-                 display_text = "*Executing...*\n\n"
+                 display_text = "<b>Executing...</b>\n\n"
              else:
                  display_text = ""  # No "Executing..." after 2 seconds
              
-             # Build display text with code block
+             # Build display text with code block using HTML
              code_block_content = "\n".join(escaped_lines)
-             display_text += "```\n" + code_block_content + "\n```"
+             display_text += f"<pre><code>{code_block_content}</code></pre>"
              
              # Limit length
              if len(display_text) > 4000:
@@ -164,10 +159,10 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
              try:
                  await status_msg.edit_text(
                      display_text,
-                     parse_mode="Markdown"
+                     parse_mode="HTML"
                  )
              except Exception as parse_error:
-                 # If Markdown parsing fails, try without parse_mode
+                 # If HTML parsing fails, try without parse_mode (plain text)
                  try:
                      if show_executing:
                          display_text_plain = "Executing...\n\n" + "\n".join(last_4_lines)
@@ -250,52 +245,85 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
          pass
  
      if not success:
-         # Escape error message to avoid parsing issues
+         # Escape error message for HTML (safer)
          error_msg = stderr or "Command execution error"
-         error_msg = error_msg.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("]", "\\]")
-         error_msg = error_msg.replace("(", "\\(").replace(")", "\\)").replace("~", "\\~")
-         error_msg = error_msg.replace("`", "\\`").replace(">", "\\>").replace("#", "\\#")
-         await status_msg.edit_text(
-             get_error_message(error_msg),
-             parse_mode="Markdown"
-         )
+         error_msg = error_msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+         try:
+             await status_msg.edit_text(
+                 f"<b>Error:</b> {error_msg}",
+                 parse_mode="HTML"
+             )
+         except:
+             # If HTML fails, use plain text
+             await status_msg.edit_text(get_error_message(error_msg))
          return
  
-     # Final update with complete output
+     # Final update with complete output - use HTML for safety
      output_text = ""
- 
+
      if stdout:
-         output_text += f"*Output:*\n{format_command_output(stdout)}\n\n"
- 
+         # Escape HTML characters and limit length
+         stdout_escaped = stdout.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+         if len(stdout_escaped) > 3500:
+             stdout_escaped = stdout_escaped[:3500] + "\n\n... (output truncated)"
+         output_text += f"<b>Output:</b>\n<pre><code>{stdout_escaped}</code></pre>\n\n"
+
      if stderr:
-         output_text += f"*Error:*\n{format_command_output(stderr)}\n\n"
- 
+         # Escape HTML characters and limit length
+         stderr_escaped = stderr.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+         if len(stderr_escaped) > 3500:
+             stderr_escaped = stderr_escaped[:3500] + "\n\n... (output truncated)"
+         output_text += f"<b>Error:</b>\n<pre><code>{stderr_escaped}</code></pre>\n\n"
+
      if not stdout and not stderr:
          output_text = "Command executed (no output)"
- 
-     # Limit message length (max 4096 characters for Telegram)
+
+     # Limit total message length (max 4096 characters for Telegram)
      if len(output_text) > 4000:
          output_text = output_text[:4000] + "\n\n... (output truncated)"
- 
-     await status_msg.edit_text(
-         output_text,
-         parse_mode="Markdown",
-         reply_markup=get_back_keyboard("menu_main")
-     )
- 
- except Exception as e:
-     # Escape error message to avoid parsing issues
-     error_msg = f"Command execution error: {str(e)}"
-     error_msg = error_msg.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("]", "\\]")
-     error_msg = error_msg.replace("(", "\\(").replace(")", "\\)").replace("~", "\\~")
-     error_msg = error_msg.replace("`", "\\`").replace(">", "\\>").replace("#", "\\#")
+
      try:
          await status_msg.edit_text(
-             get_error_message(error_msg),
-             parse_mode="Markdown"
+             output_text,
+             parse_mode="HTML",
+             reply_markup=get_back_keyboard("menu_main")
+         )
+     except Exception as html_error:
+         # If HTML fails, use plain text (no parsing)
+         output_text_plain = ""
+         if stdout:
+             stdout_plain = stdout[:3500] + "\n\n... (truncated)" if len(stdout) > 3500 else stdout
+             output_text_plain += f"Output:\n{stdout_plain}\n\n"
+         if stderr:
+             stderr_plain = stderr[:3500] + "\n\n... (truncated)" if len(stderr) > 3500 else stderr
+             output_text_plain += f"Error:\n{stderr_plain}\n\n"
+         if not stdout and not stderr:
+             output_text_plain = "Command executed (no output)"
+         if len(output_text_plain) > 4000:
+             output_text_plain = output_text_plain[:4000] + "\n\n... (output truncated)"
+         try:
+             await status_msg.edit_text(
+                 output_text_plain,
+                 reply_markup=get_back_keyboard("menu_main")
+             )
+         except:
+             # Last resort: minimal message
+             await status_msg.edit_text(
+                 "Command completed. Output too large or parsing error.",
+                 reply_markup=get_back_keyboard("menu_main")
+             )
+ 
+ except Exception as e:
+     # Escape error message for HTML (safer)
+     error_msg = f"Command execution error: {str(e)}"
+     error_msg = error_msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+     try:
+         await status_msg.edit_text(
+             f"<b>Error:</b> {error_msg}",
+             parse_mode="HTML"
          )
      except:
-         # If Markdown parsing fails, send without parse_mode
+         # If HTML parsing fails, send without parse_mode
          await status_msg.edit_text(get_error_message(error_msg))
 
 async def check_connection_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
