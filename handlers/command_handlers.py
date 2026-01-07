@@ -153,7 +153,9 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
              else:
                  display_text = ""  # No "Executing..." after 2 seconds
              
-             display_text += "```\n" + "\n".join(escaped_lines) + "\n```"
+             # Build display text with code block
+             code_block_content = "\n".join(escaped_lines)
+             display_text += "```\n" + code_block_content + "\n```"
              
              # Limit length
              if len(display_text) > 4000:
@@ -174,8 +176,12 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                      if len(display_text_plain) > 4000:
                          display_text_plain = display_text_plain[:4000] + "\n\n... (truncated)"
                      await status_msg.edit_text(display_text_plain)
-                 except:
-                     pass  # Ignore if still fails
+                 except Exception as e2:
+                     # If still fails, try with minimal content
+                     try:
+                         await status_msg.edit_text("Command output (parsing error)")
+                     except:
+                         pass  # Ignore if still fails
              
              # Update timestamp
              last_update_time = time.time()
@@ -244,8 +250,13 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
          pass
  
      if not success:
+         # Escape error message to avoid parsing issues
+         error_msg = stderr or "Command execution error"
+         error_msg = error_msg.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("]", "\\]")
+         error_msg = error_msg.replace("(", "\\(").replace(")", "\\)").replace("~", "\\~")
+         error_msg = error_msg.replace("`", "\\`").replace(">", "\\>").replace("#", "\\#")
          await status_msg.edit_text(
-             get_error_message(stderr or "Command execution error"),
+             get_error_message(error_msg),
              parse_mode="Markdown"
          )
          return
@@ -273,10 +284,19 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
      )
  
  except Exception as e:
-     await status_msg.edit_text(
-         get_error_message(f"Command execution error: {str(e)}"),
-         parse_mode="Markdown"
-     )
+     # Escape error message to avoid parsing issues
+     error_msg = f"Command execution error: {str(e)}"
+     error_msg = error_msg.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("]", "\\]")
+     error_msg = error_msg.replace("(", "\\(").replace(")", "\\)").replace("~", "\\~")
+     error_msg = error_msg.replace("`", "\\`").replace(">", "\\>").replace("#", "\\#")
+     try:
+         await status_msg.edit_text(
+             get_error_message(error_msg),
+             parse_mode="Markdown"
+         )
+     except:
+         # If Markdown parsing fails, send without parse_mode
+         await status_msg.edit_text(get_error_message(error_msg))
 
 async def check_connection_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
  """Check connection status"""
