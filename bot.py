@@ -43,9 +43,11 @@ from handlers.server_handlers import (
  WAITING_EDIT_VALUE
 )
 from handlers.command_handlers import (
- execute_command_menu,
- execute_command,
- check_connection_status
+    execute_command_menu,
+    execute_command,
+    check_connection_status,
+    send_input_menu,
+    send_input
 )
 from handlers.preset_handlers import (
  presets_menu,
@@ -253,6 +255,8 @@ async def callback_query_handler(update: Update, context):
      await server_disconnect(update, context)
  elif data == "menu_execute":
      await execute_command_menu(update, context)
+ elif data == "menu_send_input":
+     await send_input_menu(update, context)
  elif data == "menu_presets":
      await presets_menu(update, context)
  elif data == "preset_add":
@@ -318,6 +322,7 @@ def main():
  application.add_handler(CommandHandler("start", start_command))
  application.add_handler(CommandHandler("help", help_command))
  application.add_handler(CommandHandler("status", check_connection_status))
+ application.add_handler(CommandHandler("send", send_input))
  
  # ConversationHandler for adding server
  add_server_conv = ConversationHandler(
@@ -372,6 +377,10 @@ def main():
  async def execute_command_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
      # Skip if user is in conversation
      if context.user_data.get("edit_server_id") or context.user_data.get("new_server_name") or context.user_data.get("new_preset_name"):
+         return
+     # Check if waiting for input
+     if context.user_data.get("waiting_for_input"):
+         await send_input(update, context)
          return
      await execute_command(update, context)
  

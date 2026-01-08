@@ -39,17 +39,25 @@ async def execute_command_menu(update: Update, context: ContextTypes.DEFAULT_TYP
  info = ssh_manager.get_connection_info(user_id)
  server_name = info.get("server_name", "Unknown") if info else "Unknown"
  
- message = f"*Execute Command*\n\nConnected to: *{server_name}*\n\nEnter command:"
+ # Create keyboard with Send Input button
+ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+ keyboard = [
+     [InlineKeyboardButton("📤 Send Input", callback_data="menu_send_input")],
+     [InlineKeyboardButton("🔙 Back", callback_data="menu_main")]
+ ]
+ reply_markup = InlineKeyboardMarkup(keyboard)
+ 
+ message = f"*Execute Command*\n\nConnected to: *{server_name}*\n\nEnter command:\n\n💡 Tip: Use /send <input> to send input to interactive commands"
  if query:
      await query.edit_message_text(
          message,
-         reply_markup=get_back_keyboard("menu_main"),
+         reply_markup=reply_markup,
          parse_mode="Markdown"
      )
  else:
      await update.message.reply_text(
          message,
-         reply_markup=get_back_keyboard("menu_main"),
+         reply_markup=reply_markup,
          parse_mode="Markdown"
      )
 
@@ -334,19 +342,132 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
          # If HTML parsing fails, send without parse_mode
          await status_msg.edit_text(get_error_message(error_msg))
 
+async def send_input_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu for sending input to interactive command"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+    
+    user_id = update.effective_user.id
+    
+    # Check connection
+    if not ssh_manager.is_connected(user_id):
+        message = f"{get_connection_status_message(False)}\n\nConnect to a server first."
+        if query:
+            await query.edit_message_text(
+                message,
+                reply_markup=get_back_keyboard("menu_main"),
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                message,
+                reply_markup=get_back_keyboard("menu_main"),
+                parse_mode="Markdown"
+            )
+        return
+    
+    info = ssh_manager.get_connection_info(user_id)
+    server_name = info.get("server_name", "Unknown") if info else "Unknown"
+    
+    message = f"*Send Input to Screen*\n\nConnected to: *{server_name}*\n\nEnter input to send to the active screen session:"
+    if query:
+        await query.edit_message_text(
+            message,
+            reply_markup=get_back_keyboard("menu_main"),
+            parse_mode="Markdown"
+        )
+    else:
+        await update.message.reply_text(
+            message,
+            reply_markup=get_back_keyboard("menu_main"),
+            parse_mode="Markdown"
+        )
+    
+    # Set flag to indicate we're waiting for input
+    context.user_data["waiting_for_input"] = True
+
+async def send_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send input to active screen session"""
+    if update.message.chat.type != "private":
+        await update.message.reply_text("This command can only be used in private chat.")
+        return
+    
+    user_id = update.effective_user.id
+    
+    # Check if we're waiting for input (from menu) or if it's a direct command
+    if not context.user_data.get("waiting_for_input") and not update.message.text.startswith("/send"):
+        return  # Not in input mode
+    
+    # Check connection
+    if not ssh_manager.is_connected(user_id):
+        await update.message.reply_text(
+            get_connection_status_message(False),
+            reply_markup=get_back_keyboard("menu_main"),
+            parse_mode="Markdown"
+        )
+        context.user_data["waiting_for_input"] = False
+        return
+    
+    # Get input text
+    input_text = update.message.text
+    if input_text.startswith("/send "):
+        input_text = input_text[7:]  # Remove "/send " prefix
+    elif input_text.startswith("/send"):
+        # Just "/send" without text, wait for next message
+        await update.message.reply_text(
+            "Please enter the input to send to the screen session:",
+            reply_markup=get_back_keyboard("menu_main")
+        )
+        context.user_data["waiting_for_input"] = True
+        return
+    
+    if not input_text.strip():
+        await update.message.reply_text(
+            "Input cannot be empty. Please enter the input to send:",
+            reply_markup=get_back_keyboard("menu_main")
+        )
+        return
+    
+    # Send input to screen session
+    status_msg = await update.message.reply_text("Sending input to screen session...")
+    
+    try:
+        success, message = ssh_executor.send_input(user_id, input_text)
+        
+        if success:
+            await status_msg.edit_text(
+                f"✅ Input sent successfully!\n\nInput: `{input_text}`",
+                reply_markup=get_back_keyboard("menu_main"),
+                parse_mode="Markdown"
+            )
+        else:
+            await status_msg.edit_text(
+                f"❌ Error sending input: {message}",
+                reply_markup=get_back_keyboard("menu_main")
+            )
+    except Exception as e:
+        await status_msg.edit_text(
+            f"❌ Error: {str(e)}",
+            reply_markup=get_back_keyboard("menu_main")
+        )
+    
+    # Clear waiting flag
+    context.user_data["waiting_for_input"] = False
+
 async def check_connection_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
- """Check connection status"""
- user_id = update.effective_user.id
- 
- if ssh_manager.is_connected(user_id):
-     info = ssh_manager.get_connection_info(user_id)
-     server_name = info.get("server_name", "Unknown") if info else "Unknown"
-     message = get_connection_status_message(True, server_name)
- else:
-     message = get_connection_status_message(False)
- 
- await update.message.reply_text(
-     message,
-     reply_markup=get_back_keyboard("menu_main"),
-     parse_mode="Markdown"
- )
+"""Check connection status"""
+user_id = update.effective_user.id
+
+if ssh_manager.is_connected(user_id):
+    info = ssh_manager.get_connection_info(user_id)
+    server_name = info.get("server_name", "Unknown") if info else "Unknown"
+    message = get_connection_status_message(True, server_name)
+else:
+    message = get_connection_status_message(False)
+
+await update.message.reply_text(
+    message,
+    reply_markup=get_back_keyboard("menu_main"),
+    parse_mode="Markdown"
+)
