@@ -21,7 +21,7 @@ class SSHExecutor:
     @staticmethod
     def execute_command(user_id: int, command: str) -> Tuple[bool, str, str]:
         """
-        Execute command on server
+        Execute command on server in screen session
         Returns: (success, stdout, stderr)
         """
         ssh_client = ssh_manager.get_connection(user_id)
@@ -29,11 +29,40 @@ class SSHExecutor:
             return False, "", "No active connection. Connect to a server first."
         
         try:
-            # Execute command
+            # Setup screen logfile for capturing output
+            log_file = f"/tmp/orv_bot_log_{user_id}"
+            
+            # Enable logging in screen session (if not already enabled)
+            stdin_log, stdout_log, stderr_log = ssh_client.exec_command(
+                f"screen -S orv-bot -X logfile {log_file} && screen -S orv-bot -X log on 2>/dev/null || true",
+                timeout=5
+            )
+            stdout_log.read()
+            
+            # Get current log size before command
+            stdin_size, stdout_size, stderr_size = ssh_client.exec_command(
+                f"wc -c < {log_file} 2>/dev/null || echo 0",
+                timeout=5
+            )
+            initial_size = int(stdout_size.read().decode('utf-8', errors='replace').strip() or 0)
+            
+            # Escape command for screen -X stuff (escape single quotes and newlines)
+            escaped_command = command.replace("'", "'\"'\"'").replace('\n', '\\n').replace('\r', '')
+            
+            # Send command to screen session
+            stdin_cmd, stdout_cmd, stderr_cmd = ssh_client.exec_command(
+                f"screen -S orv-bot -X stuff '{escaped_command}\\n'",
+                timeout=5
+            )
+            stdout_cmd.read()
+            
+            # Wait a bit for command to execute
+            time.sleep(1)
+            
+            # Get output from log file
             stdin, stdout, stderr = ssh_client.exec_command(
-                command,
-                timeout=settings.COMMAND_TIMEOUT,
-                get_pty=True
+                f"tail -c +{initial_size} {log_file} 2>/dev/null || echo ''",
+                timeout=settings.COMMAND_TIMEOUT
             )
             
             # Read output
@@ -93,7 +122,7 @@ class SSHExecutor:
     @staticmethod
     def execute_command_realtime(user_id: int, command: str, update_callback: Callable[[str, str], None]) -> Tuple[bool, str, str]:
         """
-        Execute command with real-time output updates
+        Execute command with real-time output updates in screen session
         update_callback will be called with (stdout_chunk, stderr_chunk) as command runs
         Returns: (success, final_stdout, final_stderr)
         """
@@ -102,9 +131,37 @@ class SSHExecutor:
             return False, "", "No active connection. Connect to a server first."
         
         try:
-            # Execute command
+            # Setup screen logfile for capturing output
+            log_file = f"/tmp/orv_bot_log_{user_id}"
+            
+            # Enable logging in screen session (if not already enabled)
+            stdin_log, stdout_log, stderr_log = ssh_client.exec_command(
+                f"screen -S orv-bot -X logfile {log_file} && screen -S orv-bot -X log on 2>/dev/null || true",
+                timeout=5
+            )
+            stdout_log.read()
+            
+            # Get current log size before command
+            stdin_size, stdout_size, stderr_size = ssh_client.exec_command(
+                f"wc -c < {log_file} 2>/dev/null || echo 0",
+                timeout=5
+            )
+            initial_size = int(stdout_size.read().decode('utf-8', errors='replace').strip() or 0)
+            
+            # Escape command for screen -X stuff (escape single quotes and newlines)
+            escaped_command = command.replace("'", "'\"'\"'").replace('\n', '\\n').replace('\r', '')
+            
+            # Send command to screen session
+            stdin_cmd, stdout_cmd, stderr_cmd = ssh_client.exec_command(
+                f"screen -S orv-bot -X stuff '{escaped_command}\\n'",
+                timeout=5
+            )
+            stdout_cmd.read()
+            
+            # Poll log file for new output using a loop
+            # We'll read the log file periodically
             stdin, stdout, stderr = ssh_client.exec_command(
-                command,
+                f"bash -c 'for i in {{1..60}}; do sleep 0.5; tail -c +{initial_size} {log_file} 2>/dev/null; done'",
                 timeout=settings.COMMAND_TIMEOUT,
                 get_pty=True
             )
@@ -188,9 +245,27 @@ class SSHExecutor:
             stdout_thread.join(timeout=1)
             stderr_thread.join(timeout=1)
             
-            # Get final output (strip ANSI codes from final output too)
-            stdout_text = '\n'.join([strip_ansi_codes(line) for line in stdout_lines])
-            stderr_text = '\n'.join([strip_ansi_codes(line) for line in stderr_lines])
+            # Get final output from log file (everything after initial_size)
+            try:
+                stdin_final, stdout_final, stderr_final = ssh_client.exec_command(
+                    f"tail -c +{initial_size} {log_file} 2>/dev/null || echo ''",
+                    timeout=5
+                )
+                final_output = stdout_final.read().decode('utf-8', errors='replace')
+                
+                # Combine with what we read from stream
+                stream_output = '\n'.join([strip_ansi_codes(line) for line in stdout_lines])
+                if final_output and len(final_output.strip()) > 0:
+                    # Use final output from log (more complete)
+                    stdout_text = strip_ansi_codes(final_output)
+                else:
+                    stdout_text = stream_output
+                
+                stderr_text = '\n'.join([strip_ansi_codes(line) for line in stderr_lines])
+            except:
+                # Fallback to stream output
+                stdout_text = '\n'.join([strip_ansi_codes(line) for line in stdout_lines])
+                stderr_text = '\n'.join([strip_ansi_codes(line) for line in stderr_lines])
             
             # Close
             stdin.close()
@@ -207,7 +282,7 @@ class SSHExecutor:
     @staticmethod
     def send_input(user_id: int, input_text: str) -> Tuple[bool, str]:
         """
-        Send input to active session
+        Send input to active screen session
         Returns: (success, message)
         """
         ssh_client = ssh_manager.get_connection(user_id)
@@ -215,28 +290,17 @@ class SSHExecutor:
             return False, "No active connection"
         
         try:
-            # For interactive commands, we need an active channel
-            # This is a simple implementation and can be improved
-            transport = ssh_client.get_transport()
-            if not transport:
-                return False, "Error getting transport"
+            # Escape input for screen -X stuff (escape single quotes and newlines)
+            escaped_input = input_text.replace("'", "'\"'\"'").replace('\n', '\\n').replace('\r', '')
             
-            # Execute command with input
+            # Send input to screen session
             stdin, stdout, stderr = ssh_client.exec_command(
-                f"echo '{input_text}'",
-                get_pty=True
+                f"screen -S orv-bot -X stuff '{escaped_input}\\n'",
+                timeout=5
             )
+            stdout.read()
             
-            stdin.write(input_text + '\n')
-            stdin.flush()
-            
-            output = stdout.read().decode('utf-8', errors='replace')
-            
-            stdin.close()
-            stdout.close()
-            stderr.close()
-            
-            return True, output
+            return True, "Input sent to screen session"
         
         except Exception as e:
             return False, f"Input send error: {str(e)}"

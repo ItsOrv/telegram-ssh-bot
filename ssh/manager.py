@@ -50,6 +50,27 @@ class SSHManager:
                 "connected_at": datetime.now(timezone.utc)
             }
             
+            # Setup screen session (orv-bot)
+            try:
+                # Check if screen session exists
+                stdin, stdout, stderr = ssh_client.exec_command(
+                    "screen -list | grep -q 'orv-bot' || echo 'notfound'",
+                    timeout=5
+                )
+                screen_exists = stdout.read().decode('utf-8', errors='replace').strip() != 'notfound'
+                
+                if not screen_exists:
+                    # Create new screen session
+                    stdin, stdout, stderr = ssh_client.exec_command(
+                        "screen -dmS orv-bot bash",
+                        timeout=5
+                    )
+                    stdout.read()  # Wait for command to complete
+                # If exists, we'll just attach to it when needed
+            except Exception as e:
+                # Screen might not be available, continue anyway
+                pass
+            
             # Save to database
             with db_manager.get_session() as session:
                 # Remove old connection if exists
