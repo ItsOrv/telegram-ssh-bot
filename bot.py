@@ -32,15 +32,25 @@ from handlers.server_handlers import (
  server_delete,
  server_delete_confirm,
  server_connect,
+ connect_menu,
  connect_to_server,
  server_disconnect,
+ direct_connect_start,
+ direct_connect_host,
+ direct_connect_port,
+ direct_connect_username,
+ direct_connect_password,
  cancel,
  WAITING_SERVER_NAME,
  WAITING_SERVER_HOST,
  WAITING_SERVER_PORT,
  WAITING_SERVER_USERNAME,
  WAITING_SERVER_PASSWORD,
- WAITING_EDIT_VALUE
+ WAITING_EDIT_VALUE,
+ WAITING_DIRECT_HOST,
+ WAITING_DIRECT_PORT,
+ WAITING_DIRECT_USERNAME,
+ WAITING_DIRECT_PASSWORD
 )
 from handlers.command_handlers import (
     execute_command_menu,
@@ -221,8 +231,9 @@ async def callback_query_handler(update: Update, context):
  is_admin = settings.is_admin(user_id)
  
  if data == "menu_main":
+     welcome_message = "🤖 *Welcome to SSH Bot!*\n\nThis bot allows you to manage and execute commands on SSH servers.\n\nTo get started, use the menu below:"
      await query.edit_message_text(
-         "🤖 *Main menu*\n\nSelect an option:",
+         welcome_message,
          reply_markup=get_main_menu_keyboard(is_admin=is_admin),
          parse_mode="Markdown"
      )
@@ -247,8 +258,12 @@ async def callback_query_handler(update: Update, context):
      await server_delete(update, context)
  elif data.startswith("confirm_server_delete_"):
      await server_delete_confirm(update, context)
+ elif data == "menu_connect":
+     await connect_menu(update, context)
  elif data == "server_connect":
      await server_connect(update, context)
+ elif data == "direct_connect":
+     await direct_connect_start(update, context)
  elif data.startswith("connect_to_"):
      await connect_to_server(update, context)
  elif data == "server_disconnect":
@@ -373,10 +388,32 @@ def main():
  )
  application.add_handler(add_preset_conv)
  
+ # ConversationHandler for Direct Connect
+ direct_connect_conv = ConversationHandler(
+     entry_points=[CallbackQueryHandler(direct_connect_start, pattern="^direct_connect$")],
+     states={
+         WAITING_DIRECT_HOST: [MessageHandler(filters.TEXT & ~filters.COMMAND, direct_connect_host)],
+         WAITING_DIRECT_PORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, direct_connect_port)],
+         WAITING_DIRECT_USERNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, direct_connect_username)],
+         WAITING_DIRECT_PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, direct_connect_password)],
+     },
+     fallbacks=[
+         CallbackQueryHandler(cancel, pattern="^cancel_"),
+         CallbackQueryHandler(cancel, pattern="^menu_connect$"),
+         CallbackQueryHandler(cancel, pattern="^menu_main$"),
+         CommandHandler("cancel", cancel)
+     ],
+     per_message=False,
+ )
+ application.add_handler(direct_connect_conv)
+ 
  # Handler for command execution (must be after conversation handlers)
  async def execute_command_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
      # Skip if user is in conversation
-     if context.user_data.get("edit_server_id") or context.user_data.get("new_server_name") or context.user_data.get("new_preset_name"):
+     if (context.user_data.get("edit_server_id") or 
+         context.user_data.get("new_server_name") or 
+         context.user_data.get("new_preset_name") or
+         context.user_data.get("direct_host")):
          return
      # Check if waiting for input
      if context.user_data.get("waiting_for_input"):

@@ -4,8 +4,11 @@ from typing import List, Dict, Optional
 
 
 def get_main_menu_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
-    """Main menu"""
+    """Main menu - Connect button at top"""
     keyboard = [
+        [
+            InlineKeyboardButton("🔌 Connect", callback_data="menu_connect")
+        ],
         [
             InlineKeyboardButton("Server Management", callback_data="menu_servers"),
             InlineKeyboardButton("Execute Command", callback_data="menu_execute")
@@ -50,6 +53,26 @@ def get_server_list_keyboard(servers: List[Dict], action: str = "select") -> Inl
         keyboard.append([InlineKeyboardButton(server_name, callback_data=callback_data)])
     
     keyboard.append([InlineKeyboardButton("Back", callback_data="menu_servers")])
+    return InlineKeyboardMarkup(keyboard)
+
+def get_connect_menu_keyboard(servers: List[Dict]) -> InlineKeyboardMarkup:
+    """Connect menu keyboard - Direct Connect at top, then server list"""
+    keyboard = [
+        [
+            InlineKeyboardButton("🔗 Direct Connect", callback_data="direct_connect")
+        ]
+    ]
+    
+    # Add saved servers
+    if servers:
+        for server in servers:
+            server_id = server.get("id")
+            server_name = server.get("name", "Unnamed")
+            keyboard.append([
+                InlineKeyboardButton(server_name, callback_data=f"connect_to_{server_id}")
+            ])
+    
+    keyboard.append([InlineKeyboardButton("Back", callback_data="menu_main")])
     return InlineKeyboardMarkup(keyboard)
 
 

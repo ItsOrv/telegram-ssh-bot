@@ -12,7 +12,8 @@ from utils.keyboards import (
  get_server_list_keyboard,
  get_server_actions_keyboard,
  get_confirm_keyboard,
- get_back_keyboard
+ get_back_keyboard,
+ get_connect_menu_keyboard
 )
 from utils.messages import (
  get_server_info_message,
@@ -25,7 +26,8 @@ from config.settings import settings
 # States for ConversationHandler
 (WAITING_SERVER_NAME, WAITING_SERVER_HOST, WAITING_SERVER_PORT,
  WAITING_SERVER_USERNAME, WAITING_SERVER_PASSWORD,
- WAITING_EDIT_VALUE) = range(6)
+ WAITING_EDIT_VALUE,
+ WAITING_DIRECT_HOST, WAITING_DIRECT_PORT, WAITING_DIRECT_USERNAME, WAITING_DIRECT_PASSWORD) = range(10)
 
 async def ensure_user_exists(user_id: int, session):
  """Ensure user exists in database"""
@@ -370,76 +372,237 @@ async def server_delete_confirm(update: Update, context: ContextTypes.DEFAULT_TY
          parse_mode="Markdown"
      )
 
+async def connect_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Connect menu - shows Direct Connect and saved servers"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+    
+    user_id = update.effective_user.id
+    
+    # Check existing connection
+    if ssh_manager.is_connected(user_id):
+        info = ssh_manager.get_connection_info(user_id)
+        server_name = info.get("server_name", "Unknown") if info else "Unknown"
+        message = f"You are already connected to: {server_name}\n\nDisconnect first to connect to another server."
+        if query:
+            await query.edit_message_text(
+                message,
+                reply_markup=get_back_keyboard("menu_main"),
+                parse_mode="Markdown"
+            )
+        else:
+            await update.effective_message.reply_text(
+                message,
+                reply_markup=get_back_keyboard("menu_main"),
+                parse_mode="Markdown"
+            )
+        return
+    
+    try:
+        with db_manager.get_session() as session:
+            servers = session.query(Server).filter_by(user_id=user_id).all()
+            
+            servers_list = [
+                {"id": server.id, "name": server.name}
+                for server in servers
+            ]
+            
+            keyboard = get_connect_menu_keyboard(servers_list)
+            
+            message = "*Connect to Server*\n\nSelect a saved server or use Direct Connect:"
+            if query:
+                await query.edit_message_text(
+                    message,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text(
+                    message,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+    
+    except Exception as e:
+        error_msg = get_error_message(str(e))
+        if query:
+            await query.edit_message_text(error_msg, parse_mode="Markdown")
+        else:
+            await update.message.reply_text(error_msg, parse_mode="Markdown")
+
 async def server_connect(update: Update, context: ContextTypes.DEFAULT_TYPE):
- """Connect to server"""
- query = update.callback_query
- if query:
-     await query.answer()
- 
- user_id = update.effective_user.id
- 
- # Check existing connection
- if ssh_manager.is_connected(user_id):
-     info = ssh_manager.get_connection_info(user_id)
-     message_text = f"You are already connected to a server.\n\n{get_connection_status_message(True, info.get('server_name') if info else None)}"
-     if query:
-         await query.edit_message_text(
-             message_text,
-             reply_markup=get_back_keyboard("menu_servers"),
-             parse_mode="Markdown"
-         )
-     else:
-         await update.effective_message.reply_text(
-             message_text,
-             reply_markup=get_back_keyboard("menu_servers"),
-             parse_mode="Markdown"
-         )
-     return
- 
- try:
-     with db_manager.get_session() as session:
-         servers = session.query(Server).filter_by(user_id=user_id).all()
- 
-         if not servers:
-             if query:
-                 await query.edit_message_text(
-                     "No servers. Please add a server first.",
-                     reply_markup=get_back_keyboard("menu_servers")
-                 )
-             else:
-                 await update.effective_message.reply_text(
-                     "No servers. Please add a server first.",
-                     reply_markup=get_back_keyboard("menu_servers")
-                 )
-             return
- 
-         servers_list = [
-             {"id": server.id, "name": server.name}
-             for server in servers
-         ]
- 
-         keyboard = get_server_list_keyboard(servers_list, "connect_to")
- 
-         message = "*Connect to server*\n\nSelect server to connect:"
-         if query:
-             await query.edit_message_text(
-                 message,
-                 reply_markup=keyboard,
-                 parse_mode="Markdown"
-             )
-         else:
-             await update.message.reply_text(
-                 message,
-                 reply_markup=keyboard,
-                 parse_mode="Markdown"
-             )
- 
- except Exception as e:
-     error_msg = get_error_message(str(e))
-     if query:
-         await query.edit_message_text(error_msg, parse_mode="Markdown")
-     else:
-         await update.message.reply_text(error_msg, parse_mode="Markdown")
+    """Connect to server (legacy - redirects to connect_menu)"""
+    await connect_menu(update, context)
+
+async def direct_connect_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start direct connect process"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+    
+    user_id = update.effective_user.id
+    
+    # Check existing connection
+    if ssh_manager.is_connected(user_id):
+        info = ssh_manager.get_connection_info(user_id)
+        server_name = info.get("server_name", "Unknown") if info else "Unknown"
+        message = f"You are already connected to: {server_name}\n\nDisconnect first to connect to another server."
+        if query:
+            await query.edit_message_text(
+                message,
+                reply_markup=get_back_keyboard("menu_connect"),
+                parse_mode="Markdown"
+            )
+        return ConversationHandler.END
+    
+    if query:
+        await query.edit_message_text(
+            "*Direct Connect*\n\nEnter IP address or hostname:",
+            reply_markup=get_back_keyboard("menu_connect"),
+            parse_mode="Markdown"
+        )
+    else:
+        await update.message.reply_text(
+            "*Direct Connect*\n\nEnter IP address or hostname:",
+            reply_markup=get_back_keyboard("menu_connect"),
+            parse_mode="Markdown"
+        )
+    
+    return WAITING_DIRECT_HOST
+
+async def direct_connect_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Get host for direct connect"""
+    host = update.message.text.strip()
+    
+    # Validate host
+    is_valid_ip, ip_error = validate_ip(host)
+    if not is_valid_ip and (not host or len(host) > 255):
+        await update.message.reply_text(
+            "Invalid IP address or Hostname. Enter again:",
+            reply_markup=get_back_keyboard("menu_connect")
+        )
+        return WAITING_DIRECT_HOST
+    
+    context.user_data["direct_host"] = host
+    await update.message.reply_text(
+        f"Host: *{host}*\n\nEnter port (default: 22):",
+        reply_markup=get_back_keyboard("menu_connect"),
+        parse_mode="Markdown"
+    )
+    return WAITING_DIRECT_PORT
+
+async def direct_connect_port(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Get port for direct connect"""
+    port_text = update.message.text.strip()
+    
+    if not port_text:
+        port = 22
+    else:
+        try:
+            port = int(port_text)
+            is_valid, error = validate_port(port)
+            if not is_valid:
+                await update.message.reply_text(
+                    f"{error}\n\nEnter again:",
+                    reply_markup=get_back_keyboard("menu_connect")
+                )
+                return WAITING_DIRECT_PORT
+        except ValueError:
+            await update.message.reply_text(
+                "Port must be a number. Enter again:",
+                reply_markup=get_back_keyboard("menu_connect")
+            )
+            return WAITING_DIRECT_PORT
+    
+    context.user_data["direct_port"] = port
+    await update.message.reply_text(
+        f"Port: *{port}*\n\nEnter username:",
+        reply_markup=get_back_keyboard("menu_connect"),
+        parse_mode="Markdown"
+    )
+    return WAITING_DIRECT_USERNAME
+
+async def direct_connect_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Get username for direct connect"""
+    username = update.message.text.strip()
+    
+    if not username or len(username) > 100:
+        await update.message.reply_text(
+            "Invalid username. Enter again:",
+            reply_markup=get_back_keyboard("menu_connect")
+        )
+        return WAITING_DIRECT_USERNAME
+    
+    context.user_data["direct_username"] = username
+    await update.message.reply_text(
+        f"Username: *{username}*\n\nEnter password:",
+        reply_markup=get_back_keyboard("menu_connect"),
+        parse_mode="Markdown"
+    )
+    return WAITING_DIRECT_PASSWORD
+
+async def direct_connect_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Get password and connect"""
+    password = update.message.text.strip()
+    
+    if not password:
+        await update.message.reply_text(
+            "Password cannot be empty. Enter again:",
+            reply_markup=get_back_keyboard("menu_connect")
+        )
+        return WAITING_DIRECT_PASSWORD
+    
+    user_id = update.effective_user.id
+    host = context.user_data.get("direct_host")
+    port = context.user_data.get("direct_port", 22)
+    username = context.user_data.get("direct_username")
+    
+    if not all([host, username, password]):
+        await update.message.reply_text(
+            "Error: Missing information. Please try again.",
+            reply_markup=get_back_keyboard("menu_connect")
+        )
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    # Create temporary server object for connection
+    temp_server = Server(
+        id=0,  # Temporary ID
+        user_id=user_id,
+        name="Direct Connection",
+        host=host,
+        port=port,
+        username=username,
+        encrypted_password=encrypt_password(user_id, password)
+    )
+    
+    # Connect
+    try:
+        success, message = ssh_manager.connect(user_id, temp_server)
+        
+        if success:
+            await update.message.reply_text(
+                f"✅ {message}",
+                reply_markup=get_back_keyboard("menu_main"),
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                f"❌ {message}",
+                reply_markup=get_back_keyboard("menu_connect"),
+                parse_mode="Markdown"
+            )
+    except Exception as e:
+        await update.message.reply_text(
+            get_error_message(f"Connection error: {str(e)}"),
+            reply_markup=get_back_keyboard("menu_connect"),
+            parse_mode="Markdown"
+        )
+    
+    # Clear temporary data
+    context.user_data.clear()
+    return ConversationHandler.END
 
 async def connect_to_server(update: Update, context: ContextTypes.DEFAULT_TYPE):
  """Connect to server selected"""
@@ -463,11 +626,11 @@ async def connect_to_server(update: Update, context: ContextTypes.DEFAULT_TYPE):
          # Connect
          success, message = ssh_manager.connect(user_id, server)
  
-         await query.edit_message_text(
-             message,
-             reply_markup=get_back_keyboard("menu_servers"),
-             parse_mode="Markdown"
-         )
+        await query.edit_message_text(
+            message,
+            reply_markup=get_back_keyboard("menu_main"),
+            parse_mode="Markdown"
+        )
  
  except Exception as e:
      await query.edit_message_text(
@@ -487,11 +650,11 @@ async def server_disconnect(update: Update, context: ContextTypes.DEFAULT_TYPE):
  success, message = ssh_manager.disconnect(user_id)
  
  if query:
-     await query.edit_message_text(
-         message,
-         reply_markup=get_back_keyboard("menu_servers"),
-         parse_mode="Markdown"
-     )
+        await query.edit_message_text(
+            message,
+            reply_markup=get_back_keyboard("menu_main"),
+            parse_mode="Markdown"
+        )
  else:
      if update.effective_message:
          await update.effective_message.reply_text(
