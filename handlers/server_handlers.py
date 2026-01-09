@@ -650,11 +650,11 @@ async def server_disconnect(update: Update, context: ContextTypes.DEFAULT_TYPE):
  success, message = ssh_manager.disconnect(user_id)
  
  if query:
-        await query.edit_message_text(
-            message,
-            reply_markup=get_back_keyboard("menu_main"),
-            parse_mode="Markdown"
-        )
+     await query.edit_message_text(
+         message,
+         reply_markup=get_back_keyboard("menu_main"),
+         parse_mode="Markdown"
+     )
  else:
      if update.effective_message:
          await update.effective_message.reply_text(
