@@ -456,18 +456,18 @@ async def send_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["waiting_for_input"] = False
 
 async def check_connection_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-"""Check connection status"""
-user_id = update.effective_user.id
+    """Check connection status"""
+    user_id = update.effective_user.id
 
-if ssh_manager.is_connected(user_id):
-    info = ssh_manager.get_connection_info(user_id)
-    server_name = info.get("server_name", "Unknown") if info else "Unknown"
-    message = get_connection_status_message(True, server_name)
-else:
-    message = get_connection_status_message(False)
+    if ssh_manager.is_connected(user_id):
+        info = ssh_manager.get_connection_info(user_id)
+        server_name = info.get("server_name", "Unknown") if info else "Unknown"
+        message = get_connection_status_message(True, server_name)
+    else:
+        message = get_connection_status_message(False)
 
-await update.message.reply_text(
-    message,
-    reply_markup=get_back_keyboard("menu_main"),
-    parse_mode="Markdown"
-)
+    await update.message.reply_text(
+        message,
+        reply_markup=get_back_keyboard("menu_main"),
+        parse_mode="Markdown"
+    )
