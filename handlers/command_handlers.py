@@ -99,22 +99,45 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
  # Sanitize command
  cleaned_command = sanitize_input(command)
  
- # Show initial status
- status_msg = await update.message.reply_text("Executing command...")
- 
- # Store output lines for real-time updates
- output_lines = []
- error_lines = []
- command_start_time = time.time()  # Track when command started
- last_update_time = time.time()
- update_lock = asyncio.Lock()
- update_interval = 2.0  # Update every 2 seconds - always
- show_executing_duration = 2.0  # Show "Executing..." for first 2 seconds only
- command_running = True
+# Cancel any previous command execution task for this user
+user_id = update.effective_user.id
+if f"command_task_{user_id}" in context.user_data:
+    prev_task = context.user_data.get(f"command_task_{user_id}")
+    if prev_task and not prev_task.done():
+        prev_task.cancel()
+    if f"command_running_{user_id}" in context.user_data:
+        context.user_data[f"command_running_{user_id}"] = False
 
- async def update_message_display(force_update=False):
+# Show initial status
+status_msg = await update.message.reply_text("Executing command...")
+
+# Store the latest status message for this user
+context.user_data[f"latest_status_msg_{user_id}"] = status_msg
+
+# Store output lines for real-time updates
+output_lines = []
+error_lines = []
+command_start_time = time.time()  # Track when command started
+last_update_time = time.time()
+update_lock = asyncio.Lock()
+update_interval = 2.0  # Update every 2 seconds - always
+show_executing_duration = 2.0  # Show "Executing..." for first 2 seconds only
+command_running = True
+context.user_data[f"command_running_{user_id}"] = True
+
+async def update_message_display(force_update=False):
      """Update message with last 4 lines - always update every 2 seconds"""
-     nonlocal last_update_time
+     nonlocal last_update_time, command_running
+     
+     # Check if this is still the latest command (don't update old messages)
+     if not command_running or not context.user_data.get(f"command_running_{user_id}", False):
+         return
+     
+     # Only update if this is the latest status message
+     latest_msg = context.user_data.get(f"latest_status_msg_{user_id}")
+     if latest_msg and latest_msg.message_id != status_msg.message_id:
+         return  # This is an old message, don't update it
+     
      async with update_lock:
          try:
              # Get all lines (stdout + stderr combined)
@@ -192,14 +215,21 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
              # Ignore edit errors (message might be too similar or rate limited)
              pass
 
- # Background task to update every 2 seconds - always update
- async def periodic_update():
-     """Periodically update message every 2 seconds"""
-     nonlocal command_running, update_interval
-     while command_running:
-         await asyncio.sleep(update_interval)  # Wait exactly 2 seconds
-         if command_running:  # Check again after sleep
-             await update_message_display(force_update=True)
+# Background task to update every 2 seconds - always update
+async def periodic_update():
+    """Periodically update message every 2 seconds"""
+    nonlocal command_running, update_interval
+    while command_running and context.user_data.get(f"command_running_{user_id}", False):
+        await asyncio.sleep(update_interval)  # Wait exactly 2 seconds
+        # Check if this is still the latest command
+        if command_running and context.user_data.get(f"command_running_{user_id}", False):
+            # Verify this is still the latest status message
+            latest_msg = context.user_data.get(f"latest_status_msg_{user_id}")
+            if latest_msg and latest_msg.message_id == status_msg.message_id:
+                await update_message_display(force_update=True)
+            else:
+                # This is an old command, stop updating
+                break
  
  def output_callback(stdout_chunk: str, stderr_chunk: str):
      """Callback for real-time output updates"""
@@ -233,24 +263,26 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
      except:
          pass
  
- try:
-     # Start periodic update task
-     update_task = asyncio.create_task(periodic_update())
-     
-     # Execute command with real-time updates
-     success, stdout, stderr = ssh_executor.execute_command_realtime(
-         user_id, 
-         cleaned_command, 
-         output_callback
-     )
-     
-     # Stop periodic update task
-     command_running = False
-     update_task.cancel()
-     try:
-         await update_task
-     except asyncio.CancelledError:
-         pass
+try:
+    # Start periodic update task
+    update_task = asyncio.create_task(periodic_update())
+    context.user_data[f"command_task_{user_id}"] = update_task
+    
+    # Execute command with real-time updates
+    success, stdout, stderr = ssh_executor.execute_command_realtime(
+        user_id, 
+        cleaned_command, 
+        output_callback
+    )
+    
+    # Stop periodic update task
+    command_running = False
+    context.user_data[f"command_running_{user_id}"] = False
+    update_task.cancel()
+    try:
+        await update_task
+    except asyncio.CancelledError:
+        pass
  
      if not success:
          # Escape error message for HTML (safer)
