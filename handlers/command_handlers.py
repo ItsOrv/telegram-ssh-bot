@@ -302,10 +302,10 @@ try:
     output_text = ""
 
     if stdout:
-         # Escape HTML characters and limit length - show LAST part
-         stdout_escaped = stdout.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-         if len(stdout_escaped) > 3500:
-             # Get last 3500 characters (most recent output)
+        # Escape HTML characters and limit length - show LAST part
+        stdout_escaped = stdout.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        if len(stdout_escaped) > 3500:
+            # Get last 3500 characters (most recent output)
             stdout_escaped = "... (output truncated)\n\n" + stdout_escaped[-3500:]
         output_text += f"<b>Output:</b>\n<pre><code>{stdout_escaped}</code></pre>\n\n"
 
@@ -361,18 +361,18 @@ try:
                 reply_markup=get_back_keyboard("menu_main")
             )
  
- except Exception as e:
-     # Escape error message for HTML (safer)
-     error_msg = f"Command execution error: {str(e)}"
-     error_msg = error_msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-     try:
-         await status_msg.edit_text(
-             f"<b>Error:</b> {error_msg}",
-             parse_mode="HTML"
-         )
-     except:
-         # If HTML parsing fails, send without parse_mode
-         await status_msg.edit_text(get_error_message(error_msg))
+except Exception as e:
+    # Escape error message for HTML (safer)
+    error_msg = f"Command execution error: {str(e)}"
+    error_msg = error_msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    try:
+        await status_msg.edit_text(
+            f"<b>Error:</b> {error_msg}",
+            parse_mode="HTML"
+        )
+    except:
+        # If HTML parsing fails, send without parse_mode
+        await status_msg.edit_text(get_error_message(error_msg))
 
 async def send_input_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu for sending input to interactive command"""
