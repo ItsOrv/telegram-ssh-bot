@@ -231,7 +231,7 @@ async def periodic_update():
                 # This is an old command, stop updating
                 break
  
- def output_callback(stdout_chunk: str, stderr_chunk: str):
+def output_callback(stdout_chunk: str, stderr_chunk: str):
      """Callback for real-time output updates"""
      nonlocal output_lines, error_lines, last_update_time
      
@@ -283,83 +283,83 @@ try:
         await update_task
     except asyncio.CancelledError:
         pass
- 
-     if not success:
-         # Escape error message for HTML (safer)
-         error_msg = stderr or "Command execution error"
-         error_msg = error_msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-         try:
-             await status_msg.edit_text(
-                 f"<b>Error:</b> {error_msg}",
-                 parse_mode="HTML"
-             )
-         except:
-             # If HTML fails, use plain text
-             await status_msg.edit_text(get_error_message(error_msg))
-         return
- 
-     # Final update with complete output - use HTML for safety
-     output_text = ""
 
-     if stdout:
+    if not success:
+        # Escape error message for HTML (safer)
+        error_msg = stderr or "Command execution error"
+        error_msg = error_msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        try:
+            await status_msg.edit_text(
+                f"<b>Error:</b> {error_msg}",
+                parse_mode="HTML"
+            )
+        except:
+            # If HTML fails, use plain text
+            await status_msg.edit_text(get_error_message(error_msg))
+        return
+ 
+    # Final update with complete output - use HTML for safety
+    output_text = ""
+
+    if stdout:
          # Escape HTML characters and limit length - show LAST part
          stdout_escaped = stdout.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
          if len(stdout_escaped) > 3500:
              # Get last 3500 characters (most recent output)
-             stdout_escaped = "... (output truncated)\n\n" + stdout_escaped[-3500:]
-         output_text += f"<b>Output:</b>\n<pre><code>{stdout_escaped}</code></pre>\n\n"
+            stdout_escaped = "... (output truncated)\n\n" + stdout_escaped[-3500:]
+        output_text += f"<b>Output:</b>\n<pre><code>{stdout_escaped}</code></pre>\n\n"
 
-     if stderr:
-         # Escape HTML characters and limit length - show LAST part
-         stderr_escaped = stderr.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-         if len(stderr_escaped) > 3500:
-             # Get last 3500 characters (most recent output)
-             stderr_escaped = "... (output truncated)\n\n" + stderr_escaped[-3500:]
-         output_text += f"<b>Error:</b>\n<pre><code>{stderr_escaped}</code></pre>\n\n"
+    if stderr:
+        # Escape HTML characters and limit length - show LAST part
+        stderr_escaped = stderr.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        if len(stderr_escaped) > 3500:
+            # Get last 3500 characters (most recent output)
+            stderr_escaped = "... (output truncated)\n\n" + stderr_escaped[-3500:]
+        output_text += f"<b>Error:</b>\n<pre><code>{stderr_escaped}</code></pre>\n\n"
 
-     if not stdout and not stderr:
-         output_text = "Command executed (no output)"
+    if not stdout and not stderr:
+        output_text = "Command executed (no output)"
 
-     # Limit total message length (max 4096 characters for Telegram)
-     if len(output_text) > 4000:
-         output_text = output_text[:4000] + "\n\n... (output truncated)"
+    # Limit total message length (max 4096 characters for Telegram)
+    if len(output_text) > 4000:
+        output_text = output_text[:4000] + "\n\n... (output truncated)"
 
-     try:
-         await status_msg.edit_text(
-             output_text,
-             parse_mode="HTML",
-             reply_markup=get_back_keyboard("menu_main")
-         )
-     except Exception as html_error:
-         # If HTML fails, use plain text (no parsing) - show LAST part
-         output_text_plain = ""
-         if stdout:
-             if len(stdout) > 3500:
-                 stdout_plain = "... (truncated)\n\n" + stdout[-3500:]
-             else:
-                 stdout_plain = stdout
-             output_text_plain += f"Output:\n{stdout_plain}\n\n"
-         if stderr:
-             if len(stderr) > 3500:
-                 stderr_plain = "... (truncated)\n\n" + stderr[-3500:]
-             else:
-                 stderr_plain = stderr
-             output_text_plain += f"Error:\n{stderr_plain}\n\n"
-         if not stdout and not stderr:
-             output_text_plain = "Command executed (no output)"
-         if len(output_text_plain) > 4000:
-             output_text_plain = output_text_plain[:4000] + "\n\n... (output truncated)"
-         try:
-             await status_msg.edit_text(
-                 output_text_plain,
-                 reply_markup=get_back_keyboard("menu_main")
-             )
-         except:
-             # Last resort: minimal message
-             await status_msg.edit_text(
-                 "Command completed. Output too large or parsing error.",
-                 reply_markup=get_back_keyboard("menu_main")
-             )
+    try:
+        await status_msg.edit_text(
+            output_text,
+            parse_mode="HTML",
+            reply_markup=get_back_keyboard("menu_main")
+        )
+    except Exception as html_error:
+        # If HTML fails, use plain text (no parsing) - show LAST part
+        output_text_plain = ""
+        if stdout:
+            if len(stdout) > 3500:
+                stdout_plain = "... (truncated)\n\n" + stdout[-3500:]
+            else:
+                stdout_plain = stdout
+            output_text_plain += f"Output:\n{stdout_plain}\n\n"
+        if stderr:
+            if len(stderr) > 3500:
+                stderr_plain = "... (truncated)\n\n" + stderr[-3500:]
+            else:
+                stderr_plain = stderr
+            output_text_plain += f"Error:\n{stderr_plain}\n\n"
+        if not stdout and not stderr:
+            output_text_plain = "Command executed (no output)"
+        if len(output_text_plain) > 4000:
+            output_text_plain = output_text_plain[:4000] + "\n\n... (output truncated)"
+        try:
+            await status_msg.edit_text(
+                output_text_plain,
+                reply_markup=get_back_keyboard("menu_main")
+            )
+        except:
+            # Last resort: minimal message
+            await status_msg.edit_text(
+                "Command completed. Output too large or parsing error.",
+                reply_markup=get_back_keyboard("menu_main")
+            )
  
  except Exception as e:
      # Escape error message for HTML (safer)
