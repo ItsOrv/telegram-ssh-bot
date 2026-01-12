@@ -125,142 +125,142 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data[f"command_running_{user_id}"] = True
 
     async def update_message_display(force_update=False):
-    """Update message with last 4 lines - always update every 2 seconds"""
-    nonlocal last_update_time, command_running, output_lines, error_lines, status_msg, command_start_time, show_executing_duration
-     
-    # Check if this is still the latest command (don't update old messages)
-    if not command_running or not context.user_data.get(f"command_running_{user_id}", False):
-        return
-    
-    # Only update if this is the latest status message
-    latest_msg = context.user_data.get(f"latest_status_msg_{user_id}")
-    if latest_msg and latest_msg.message_id != status_msg.message_id:
-        return  # This is an old message, don't update it
-    
-    async with update_lock:
-        try:
-            # Get all lines (stdout + stderr combined)
-            all_lines = []
-            
-            # Add stdout lines
-            for line in output_lines:
-                all_lines.append(line)
-            
-            # Add stderr lines with prefix
-            for line in error_lines:
-                all_lines.append(f"[ERROR] {line}")
-            
-            # Check if we should show "Executing..." (only first 2 seconds)
-            current_time = time.time()
-            elapsed_time = current_time - command_start_time
-            show_executing = elapsed_time < show_executing_duration
-            
-            # Get last 4 lines
-            if all_lines:
-                last_4_lines = all_lines[-4:]
-            else:
-                # No output yet
-                if show_executing:
-                    last_4_lines = ["Waiting for output..."]
-                else:
-                    last_4_lines = ["No output yet..."]
-            
-            # Format output - escape for HTML (safer than Markdown)
-            escaped_lines = []
-            for line in last_4_lines:
-                # Escape HTML special characters only
-                escaped_line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                escaped_lines.append(escaped_line)
-            
-            # Format output using HTML - only show "Executing..." for first 2 seconds
-            if show_executing:
-                display_text = "<b>Executing...</b>\n\n"
-            else:
-                display_text = ""  # No "Executing..." after 2 seconds
-            
-            # Build display text with code block using HTML
-            code_block_content = "\n".join(escaped_lines)
-            display_text += f"<pre><code>{code_block_content}</code></pre>"
-            
-            # Limit length
-            if len(display_text) > 4000:
-                display_text = display_text[:4000] + "\n\n... (truncated)"
-            
+        """Update message with last 4 lines - always update every 2 seconds"""
+        nonlocal last_update_time, command_running, output_lines, error_lines, status_msg, command_start_time, show_executing_duration, update_lock
+        
+        # Check if this is still the latest command (don't update old messages)
+        if not command_running or not context.user_data.get(f"command_running_{user_id}", False):
+            return
+        
+        # Only update if this is the latest status message
+        latest_msg = context.user_data.get(f"latest_status_msg_{user_id}")
+        if latest_msg and latest_msg.message_id != status_msg.message_id:
+            return  # This is an old message, don't update it
+        
+        async with update_lock:
             try:
-                await status_msg.edit_text(
-                    display_text,
-                    parse_mode="HTML"
-                )
-            except Exception as parse_error:
-                # If HTML parsing fails, try without parse_mode (plain text)
-                try:
+                # Get all lines (stdout + stderr combined)
+                all_lines = []
+                
+                # Add stdout lines
+                for line in output_lines:
+                    all_lines.append(line)
+                
+                # Add stderr lines with prefix
+                for line in error_lines:
+                    all_lines.append(f"[ERROR] {line}")
+                
+                # Check if we should show "Executing..." (only first 2 seconds)
+                current_time = time.time()
+                elapsed_time = current_time - command_start_time
+                show_executing = elapsed_time < show_executing_duration
+                
+                # Get last 4 lines
+                if all_lines:
+                    last_4_lines = all_lines[-4:]
+                else:
+                    # No output yet
                     if show_executing:
-                        display_text_plain = "Executing...\n\n" + "\n".join(last_4_lines)
+                        last_4_lines = ["Waiting for output..."]
                     else:
-                        display_text_plain = "\n".join(last_4_lines)
-                    if len(display_text_plain) > 4000:
-                        display_text_plain = display_text_plain[:4000] + "\n\n... (truncated)"
-                    await status_msg.edit_text(display_text_plain)
-                except Exception as e2:
-                    # If still fails, try with minimal content
+                        last_4_lines = ["No output yet..."]
+                
+                # Format output - escape for HTML (safer than Markdown)
+                escaped_lines = []
+                for line in last_4_lines:
+                    # Escape HTML special characters only
+                    escaped_line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                    escaped_lines.append(escaped_line)
+                
+                # Format output using HTML - only show "Executing..." for first 2 seconds
+                if show_executing:
+                    display_text = "<b>Executing...</b>\n\n"
+                else:
+                    display_text = ""  # No "Executing..." after 2 seconds
+                
+                # Build display text with code block using HTML
+                code_block_content = "\n".join(escaped_lines)
+                display_text += f"<pre><code>{code_block_content}</code></pre>"
+                
+                # Limit length
+                if len(display_text) > 4000:
+                    display_text = display_text[:4000] + "\n\n... (truncated)"
+                
+                try:
+                    await status_msg.edit_text(
+                        display_text,
+                        parse_mode="HTML"
+                    )
+                except Exception as parse_error:
+                    # If HTML parsing fails, try without parse_mode (plain text)
                     try:
-                        await status_msg.edit_text("Command output (parsing error)")
-                    except:
-                        pass  # Ignore if still fails
-            
-            # Update timestamp
-            last_update_time = time.time()
-        except Exception as e:
-            # Ignore edit errors (message might be too similar or rate limited)
-            pass
+                        if show_executing:
+                            display_text_plain = "Executing...\n\n" + "\n".join(last_4_lines)
+                        else:
+                            display_text_plain = "\n".join(last_4_lines)
+                        if len(display_text_plain) > 4000:
+                            display_text_plain = display_text_plain[:4000] + "\n\n... (truncated)"
+                        await status_msg.edit_text(display_text_plain)
+                    except Exception as e2:
+                        # If still fails, try with minimal content
+                        try:
+                            await status_msg.edit_text("Command output (parsing error)")
+                        except:
+                            pass  # Ignore if still fails
+                
+                # Update timestamp
+                last_update_time = time.time()
+            except Exception as e:
+                # Ignore edit errors (message might be too similar or rate limited)
+                pass
 
     # Background task to update every 2 seconds - always update
     async def periodic_update():
-    """Periodically update message every 2 seconds"""
-    nonlocal command_running, update_interval
-    while command_running and context.user_data.get(f"command_running_{user_id}", False):
-        await asyncio.sleep(update_interval)  # Wait exactly 2 seconds
-        # Check if this is still the latest command
-        if command_running and context.user_data.get(f"command_running_{user_id}", False):
-            # Verify this is still the latest status message
-            latest_msg = context.user_data.get(f"latest_status_msg_{user_id}")
-            if latest_msg and latest_msg.message_id == status_msg.message_id:
-                await update_message_display(force_update=True)
-            else:
-                # This is an old command, stop updating
-                break
+        """Periodically update message every 2 seconds"""
+        nonlocal command_running, update_interval, status_msg
+        while command_running and context.user_data.get(f"command_running_{user_id}", False):
+            await asyncio.sleep(update_interval)  # Wait exactly 2 seconds
+            # Check if this is still the latest command
+            if command_running and context.user_data.get(f"command_running_{user_id}", False):
+                # Verify this is still the latest status message
+                latest_msg = context.user_data.get(f"latest_status_msg_{user_id}")
+                if latest_msg and latest_msg.message_id == status_msg.message_id:
+                    await update_message_display(force_update=True)
+                else:
+                    # This is an old command, stop updating
+                    break
  
-    def output_callback(stdout_chunk: str, stderr_chunk: str):
-    """Callback for real-time output updates"""
-    nonlocal output_lines, error_lines, last_update_time
-    
-    has_new_data = False
-    
-    if stdout_chunk:
-        # Add new lines to output
-        for line in stdout_chunk.split('\n'):
-            if line.strip():
-                output_lines.append(line)
-                has_new_data = True
-    
-    if stderr_chunk:
-        # Add new lines to errors
-        for line in stderr_chunk.split('\n'):
-            if line.strip():
-                error_lines.append(line)
-                has_new_data = True
-    
-    # Update immediately if new data, or trigger periodic update if empty (from executor's 2-second check)
-    if has_new_data:
-        last_update_time = time.time()
-    
-    # Always try to update (will check if needed in update_message_display)
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.create_task(update_message_display(force_update=has_new_data))
-    except:
-        pass
+        def output_callback(stdout_chunk: str, stderr_chunk: str):
+        """Callback for real-time output updates"""
+        nonlocal output_lines, error_lines, last_update_time
+        
+        has_new_data = False
+        
+        if stdout_chunk:
+            # Add new lines to output
+            for line in stdout_chunk.split('\n'):
+                if line.strip():
+                    output_lines.append(line)
+                    has_new_data = True
+        
+        if stderr_chunk:
+            # Add new lines to errors
+            for line in stderr_chunk.split('\n'):
+                if line.strip():
+                    error_lines.append(line)
+                    has_new_data = True
+        
+        # Update immediately if new data, or trigger periodic update if empty (from executor's 2-second check)
+        if has_new_data:
+            last_update_time = time.time()
+        
+        # Always try to update (will check if needed in update_message_display)
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(update_message_display(force_update=has_new_data))
+        except:
+            pass
  
     try:
         # Start periodic update task
