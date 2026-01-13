@@ -214,8 +214,8 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Ignore edit errors (message might be too similar or rate limited)
                 pass
 
-    # Background task to update every 2 seconds - always update
-    async def periodic_update():
+ # Background task to update every 2 seconds - always update
+ async def periodic_update():
         """Periodically update message every 2 seconds"""
         nonlocal command_running, update_interval, status_msg
         while command_running and context.user_data.get(f"command_running_{user_id}", False):
