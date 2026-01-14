@@ -34,6 +34,29 @@ def validate_ip(ip: str) -> Tuple[bool, Optional[str]]:
         return False, "Invalid IP address"
 
 
+def validate_hostname(hostname: str) -> Tuple[bool, Optional[str]]:
+    """Validate hostname according to RFC 1123"""
+    if not hostname or len(hostname) > 253:
+        return False, "Hostname must be between 1 and 253 characters"
+    
+    # Check for valid hostname pattern
+    # Allowed: letters, digits, hyphens, dots
+    # Must start and end with letter or digit
+    # Each label (between dots) must be 1-63 chars
+    if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$', hostname):
+        return False, "Invalid hostname format"
+    
+    # Check each label length
+    labels = hostname.split('.')
+    for label in labels:
+        if len(label) > 63:
+            return False, "Hostname label too long (max 63 characters)"
+        if len(label) == 0:
+            return False, "Hostname cannot contain empty labels"
+    
+    return True, None
+
+
 def validate_port(port: int) -> Tuple[bool, Optional[str]]:
     """Validate port"""
     if 1 <= port <= 65535:
@@ -96,12 +119,13 @@ def sanitize_input(text: str) -> str:
 
 def validate_server_info(host: str, port: int, username: str, password: str) -> Tuple[bool, Optional[str]]:
     """Validate server information"""
-    # Validate IP
+    # Validate IP or hostname
     is_valid_ip, ip_error = validate_ip(host)
     if not is_valid_ip:
-        # Might be hostname, simple check
-        if not host or len(host) > 255:
-            return False, "Invalid host"
+        # Try hostname validation
+        is_valid_hostname, hostname_error = validate_hostname(host)
+        if not is_valid_hostname:
+            return False, hostname_error or ip_error or "Invalid host"
     
     # Validate port
     is_valid_port, port_error = validate_port(port)

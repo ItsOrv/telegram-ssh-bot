@@ -37,6 +37,9 @@ def encrypt_password(user_id: int, password: str) -> str:
 
 def decrypt_password(user_id: int, encrypted_password: str) -> str:
     """Decrypt password with user key"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     if not encrypted_password:
         return ""
     
@@ -55,5 +58,11 @@ def decrypt_password(user_id: int, encrypted_password: str) -> str:
         password_bytes = aesgcm.decrypt(nonce, ciphertext, None)
         
         return password_bytes.decode('utf-8')
+    except ValueError as e:
+        # Log decryption errors for security monitoring
+        logger.error(f"Decryption error for user {user_id}: {str(e)}", exc_info=True)
+        raise ValueError(f"Decryption error: Invalid encrypted data")
     except Exception as e:
+        # Log unexpected errors
+        logger.error(f"Unexpected decryption error for user {user_id}: {str(e)}", exc_info=True)
         raise ValueError(f"Decryption error: {str(e)}")
