@@ -71,21 +71,32 @@ async def add_preset_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
  return WAITING_PRESET_COMMAND
 
 async def add_preset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
- """Get command and save"""
- command = update.message.text.strip()
- preset_name = context.user_data.get("new_preset_name")
- 
- # Check command
- is_valid, warning, error = validate_command(command)
- 
- if not is_valid:
-     await update.message.reply_text(
-         get_error_message(error or "Invalid command"),
-         reply_markup=get_back_keyboard("menu_presets"),
-         parse_mode="Markdown"
-     )
-     context.user_data.clear()
-     return ConversationHandler.END
+    """Get command and save"""
+    command = update.message.text.strip()
+    preset_name = context.user_data.get("new_preset_name")
+    
+    # Check command length
+    from config.settings import settings
+    if len(command) > settings.MAX_COMMAND_LENGTH:
+        await update.message.reply_text(
+            get_error_message(f"Command length must not exceed {settings.MAX_COMMAND_LENGTH} characters"),
+            reply_markup=get_back_keyboard("menu_presets"),
+            parse_mode="Markdown"
+        )
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    # Check command
+    is_valid, warning, error = validate_command(command)
+    
+    if not is_valid:
+        await update.message.reply_text(
+            get_error_message(error or "Invalid command"),
+            reply_markup=get_back_keyboard("menu_presets"),
+            parse_mode="Markdown"
+        )
+        context.user_data.clear()
+        return ConversationHandler.END
  
  # Show warning if exists
  if warning:
@@ -218,8 +229,28 @@ async def preset_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
          # Show executing message
          await query.edit_message_text(f"Executing: *{preset.name}*...", parse_mode="Markdown")
  
-         # Execute command
-         success, stdout, stderr = ssh_executor.execute_command(user_id, preset.command)
+        # Execute command with logging
+        import time
+        from utils.logger import log_command_execution
+        from ssh.manager import ssh_manager
+        
+        command_start_time = time.time()
+        success, stdout, stderr = ssh_executor.execute_command(user_id, preset.command)
+        execution_time = time.time() - command_start_time
+        
+        # Log command execution
+        info = ssh_manager.get_connection_info(user_id)
+        server_id = info.get("server_id") if info else None
+        
+        log_command_execution(
+            user_id=user_id,
+            command=preset.command,
+            success=success,
+            output_length=len(stdout) if stdout else 0,
+            error_length=len(stderr) if stderr else 0,
+            execution_time=execution_time,
+            server_id=server_id
+        )
  
          if not success:
              await query.edit_message_text(
