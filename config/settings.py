@@ -45,19 +45,43 @@ class Settings:
     @classmethod
     def validate(cls) -> tuple[bool, List[str]]:
         """Check if settings are valid"""
+        import re
         errors = []
         
         if not cls.TELEGRAM_TOKEN:
             errors.append("TELEGRAM_TOKEN is required")
+        elif not re.match(r'^\d+:[A-Za-z0-9_-]+$', cls.TELEGRAM_TOKEN):
+            errors.append("TELEGRAM_TOKEN format is invalid (expected format: BOT_ID:BOT_TOKEN)")
         
         if not cls.ADMIN_IDS:
             errors.append("At least one ADMIN_ID is required")
+        else:
+            for admin_id in cls.ADMIN_IDS:
+                if not isinstance(admin_id, int) or admin_id <= 0:
+                    errors.append(f"Invalid ADMIN_ID: {admin_id} (must be positive integer)")
         
         if not cls.DATABASE_URL:
             errors.append("DATABASE_URL is required")
+        else:
+            # Validate DATABASE_URL format
+            if not cls.DATABASE_URL.startswith(('postgresql://', 'postgresql+psycopg2://')):
+                errors.append("DATABASE_URL must start with 'postgresql://' or 'postgresql+psycopg2://'")
+            # Check for required components
+            if '@' not in cls.DATABASE_URL or ':' not in cls.DATABASE_URL.split('@')[-1]:
+                errors.append("DATABASE_URL format is invalid (expected: postgresql://user:password@host:port/dbname)")
         
         if not cls.MASTER_ENCRYPTION_KEY or len(cls.MASTER_ENCRYPTION_KEY) < 32:
             errors.append("MASTER_ENCRYPTION_KEY must be at least 32 characters")
+        
+        # Validate numeric settings
+        if cls.COMMAND_TIMEOUT <= 0:
+            errors.append("COMMAND_TIMEOUT must be positive")
+        if cls.CONNECTION_TIMEOUT <= 0:
+            errors.append("CONNECTION_TIMEOUT must be positive")
+        if cls.MAX_COMMAND_LENGTH <= 0:
+            errors.append("MAX_COMMAND_LENGTH must be positive")
+        if cls.RATE_LIMIT_PER_MINUTE <= 0:
+            errors.append("RATE_LIMIT_PER_MINUTE must be positive")
         
         return len(errors) == 0, errors
     
