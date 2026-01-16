@@ -90,20 +90,38 @@ logger = logging.getLogger(__name__)
 
 # Rate limiting
 user_requests = defaultdict(list)
+command_executions = defaultdict(list)  # Separate rate limiting for command execution
 
 def check_rate_limit(user_id: int) -> bool:
- """Check rate limit"""
- now = datetime.now(timezone.utc)
- minute_ago = now - timedelta(minutes=1)
- 
- # Remove old ones
- user_requests[user_id] = [t for t in user_requests[user_id] if t > minute_ago]
- 
- if len(user_requests[user_id]) >= settings.RATE_LIMIT_PER_MINUTE:
-     return False
- 
- user_requests[user_id].append(now)
- return True
+    """Check rate limit for general requests"""
+    now = datetime.now(timezone.utc)
+    minute_ago = now - timedelta(minutes=1)
+    
+    # Remove old ones
+    user_requests[user_id] = [t for t in user_requests[user_id] if t > minute_ago]
+    
+    if len(user_requests[user_id]) >= settings.RATE_LIMIT_PER_MINUTE:
+        return False
+    
+    user_requests[user_id].append(now)
+    return True
+
+def check_command_rate_limit(user_id: int) -> bool:
+    """Check rate limit for command execution (more restrictive)"""
+    now = datetime.now(timezone.utc)
+    minute_ago = now - timedelta(minutes=1)
+    
+    # Remove old ones
+    command_executions[user_id] = [t for t in command_executions[user_id] if t > minute_ago]
+    
+    # Limit command executions to 10 per minute (more restrictive than general requests)
+    command_limit = min(settings.RATE_LIMIT_PER_MINUTE // 3, 10)
+    
+    if len(command_executions[user_id]) >= command_limit:
+        return False
+    
+    command_executions[user_id].append(now)
+    return True
 
 async def check_access(update: Update, context) -> bool:
  """Check user access"""
@@ -129,7 +147,8 @@ async def check_access(update: Update, context) -> bool:
  
          if admin_user and admin_user.public_mode_enabled:
              return True
- except:
+ except Exception as e:
+     logger.warning(f"Error checking public mode: {e}")
      pass
  
  # In inactive mode, only admins have access
@@ -201,7 +220,15 @@ async def help_command(update: Update, context):
 async def callback_query_handler(update: Update, context):
  """General handler for callback queries"""
  query = update.callback_query
- await query.answer()
+ if not query:
+     return
+ 
+ # Answer callback query immediately to prevent timeout
+ try:
+     await query.answer()
+ except Exception as e:
+     logger.warning(f"Error answering callback query: {e}")
+     # Continue anyway
  
  data = query.data
  
@@ -220,7 +247,8 @@ async def callback_query_handler(update: Update, context):
                          "Bot is currently only active for admins."
                      )
                      return
-         except:
+         except Exception as e:
+             logger.error(f"Error checking access: {e}")
              await query.edit_message_text(
                  "Error Check access."
              )
@@ -232,17 +260,46 @@ async def callback_query_handler(update: Update, context):
  
  if data == "menu_main":
      welcome_message = "🤖 *Welcome to SSH Bot!*\n\nThis bot allows you to manage and execute commands on SSH servers.\n\nTo get started, use the menu below:"
-     await query.edit_message_text(
-         welcome_message,
-         reply_markup=get_main_menu_keyboard(is_admin=is_admin),
-         parse_mode="Markdown"
-     )
+     try:
+         await query.edit_message_text(
+             welcome_message,
+             reply_markup=get_main_menu_keyboard(is_admin=is_admin),
+             parse_mode="Markdown"
+         )
+     except Exception as e:
+         logger.warning(f"Error editing message (menu_main): {e}")
+         # Try to send new message if edit fails
+         except Exception as e:
+             logger.warning(f"Error sending message (menu_main fallback): {e}")
+             try:
+                 await query.message.reply_text(
+                     welcome_message,
+                     reply_markup=get_main_menu_keyboard(is_admin=is_admin),
+                     parse_mode="Markdown"
+                 )
+             except Exception as e2:
+                 logger.error(f"Failed to send message: {e2}")
+                 pass
  elif data == "menu_help":
-     await query.edit_message_text(
-         get_help_message(),
-         reply_markup=get_main_menu_keyboard(is_admin=is_admin),
-         parse_mode="Markdown"
-     )
+     try:
+         await query.edit_message_text(
+             get_help_message(),
+             reply_markup=get_main_menu_keyboard(is_admin=is_admin),
+             parse_mode="Markdown"
+         )
+     except Exception as e:
+         logger.warning(f"Error editing message (menu_help): {e}")
+         except Exception as e:
+             logger.warning(f"Error sending help message (fallback): {e}")
+             try:
+                 await query.message.reply_text(
+                     get_help_message(),
+                     reply_markup=get_main_menu_keyboard(is_admin=is_admin),
+                     parse_mode="Markdown"
+                 )
+             except Exception as e2:
+                 logger.error(f"Failed to send help message: {e2}")
+                 pass
  elif data == "menu_servers":
      await servers_menu(update, context)
  elif data == "server_add":
@@ -272,6 +329,9 @@ async def callback_query_handler(update: Update, context):
      await execute_command_menu(update, context)
  elif data == "menu_send_input":
      await send_input_menu(update, context)
+ elif data == "reset_screen":
+     from handlers.command_handlers import reset_screen
+     await reset_screen(update, context)
  elif data == "menu_presets":
      await presets_menu(update, context)
  elif data == "preset_add":
@@ -295,32 +355,82 @@ async def callback_query_handler(update: Update, context):
 
 async def error_handler(update: Update, context):
  """General error handler"""
- logger.error(f"Exception while handling an update: {context.error}")
+ error = context.error
+ logger.error(f"Exception while handling an update: {error}", exc_info=error)
  
+ # Handle specific Telegram errors
+ if hasattr(error, 'message'):
+     error_msg = str(error.message)
+     
+     # Ignore common non-critical errors
+     if "Message is not modified" in error_msg:
+         logger.debug("Message not modified (ignored)")
+         return
+     if "Query is too old" in error_msg or "query id is invalid" in error_msg:
+         logger.debug("Query timeout (ignored)")
+         return
+     if "Bad Request: message to edit not found" in error_msg:
+         logger.debug("Message to edit not found (ignored)")
+         return
+     
+     # For callback queries, try to answer if not already answered
+     if update and update.callback_query:
+         try:
+             await update.callback_query.answer(
+                 "⚠️ An error occurred. Please try again.",
+                 show_alert=False
+             )
+         except Exception as e:
+             logger.debug(f"Error answering callback query: {e}")
+             pass
+         return
+ 
+ # For other errors, try to send error message
  if update and update.effective_message:
      try:
          await update.effective_message.reply_text(
-             "An error occurred. Please try again."
+             "⚠️ An error occurred. Please try again."
          )
-     except:
+     except Exception as e:
+         logger.warning(f"Error sending error message: {e}")
          pass
 
 async def cleanup_task(context):
- """Periodic cleanup task"""
- try:
-     ssh_manager.cleanup_idle_connections()
- except Exception as e:
-     logger.error(f"Error in cleanup task: {e}")
+    """Periodic cleanup task"""
+    try:
+        ssh_manager.cleanup_idle_connections()
+        
+        # Clean up old log files
+        from utils.cleanup import cleanup_old_log_files
+        cleanup_old_log_files(max_age_hours=24)
+    except Exception as e:
+        logger.error(f"Error in cleanup task: {e}")
 
 def main():
- """Main function"""
- # Validate settings
- is_valid, errors = settings.validate()
- if not is_valid:
-     logger.error("Error in settings:")
-     for error in errors:
-         logger.error(f" - {error}")
-     return
+    """Main function"""
+    import signal
+    import sys
+    
+    # Setup graceful shutdown handler
+    def signal_handler(signum, frame):
+        logger.info("Received shutdown signal, cleaning up...")
+        try:
+            ssh_manager.disconnect_all()
+            db_manager.close()
+        except Exception as e:
+            logger.error(f"Error during shutdown: {e}")
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Validate settings
+    is_valid, errors = settings.validate()
+    if not is_valid:
+        logger.error("Error in settings:")
+        for error in errors:
+            logger.error(f" - {error}")
+        return
  
  # Initialize database
  try:
