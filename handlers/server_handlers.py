@@ -5,7 +5,7 @@ from typing import Dict
 from database.connection import db_manager
 from database.models import User, Server
 from security.encryption import encrypt_password
-from security.validator import validate_server_info, validate_ip, validate_port
+from security.validator import validate_server_info, validate_ip, validate_port, validate_hostname
 from ssh.manager import ssh_manager
 from utils.keyboards import (
  get_servers_menu_keyboard,
@@ -88,14 +88,16 @@ async def add_server_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
  """Get Host"""
  host = update.message.text.strip()
  
- # Validate host
- is_valid_ip, ip_error = validate_ip(host)
- if not is_valid_ip and (not host or len(host) > 255):
-     await update.message.reply_text(
-         "Invalid IP address or Hostname. Enter again:",
-         reply_markup=get_back_keyboard("menu_servers")
-     )
-     return WAITING_SERVER_HOST
+    # Validate host (IP or hostname)
+    is_valid_ip, ip_error = validate_ip(host)
+    if not is_valid_ip:
+        is_valid_hostname, hostname_error = validate_hostname(host)
+        if not is_valid_hostname:
+            await update.message.reply_text(
+                f"Invalid IP address or hostname: {hostname_error or ip_error}. Enter again:",
+                reply_markup=get_back_keyboard("menu_servers")
+            )
+            return WAITING_SERVER_HOST
  
  context.user_data["new_server_host"] = host
  await update.message.reply_text(
@@ -475,14 +477,16 @@ async def direct_connect_host(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Get host for direct connect"""
     host = update.message.text.strip()
     
-    # Validate host
+    # Validate host (IP or hostname)
     is_valid_ip, ip_error = validate_ip(host)
-    if not is_valid_ip and (not host or len(host) > 255):
-        await update.message.reply_text(
-            "Invalid IP address or Hostname. Enter again:",
-            reply_markup=get_back_keyboard("menu_connect")
-        )
-        return WAITING_DIRECT_HOST
+    if not is_valid_ip:
+        is_valid_hostname, hostname_error = validate_hostname(host)
+        if not is_valid_hostname:
+            await update.message.reply_text(
+                f"Invalid IP address or hostname: {hostname_error or ip_error}. Enter again:",
+                reply_markup=get_back_keyboard("menu_connect")
+            )
+            return WAITING_DIRECT_HOST
     
     context.user_data["direct_host"] = host
     await update.message.reply_text(
@@ -577,67 +581,165 @@ async def direct_connect_password(update: Update, context: ContextTypes.DEFAULT_
         encrypted_password=encrypt_password(user_id, password)
     )
     
+    # Show connecting message first
+    connecting_msg = await update.message.reply_text(
+        f"🔄 Connecting to {host}...",
+        reply_markup=get_back_keyboard("menu_connect"),
+        parse_mode="Markdown"
+    )
+    
     # Connect
     try:
         success, message = ssh_manager.connect(user_id, temp_server)
         
+        # Format message based on success
         if success:
-            await update.message.reply_text(
-                f"✅ {message}",
-                reply_markup=get_back_keyboard("menu_main"),
+            formatted_message = f"✅ {message}"
+            keyboard = get_back_keyboard("menu_main")
+        else:
+            formatted_message = f"❌ {message}"
+            keyboard = get_back_keyboard("menu_connect")
+        
+        # Edit connecting message with result - handle "message not modified" error
+        try:
+            await connecting_msg.edit_text(
+                formatted_message,
+                reply_markup=keyboard,
                 parse_mode="Markdown"
             )
-        else:
-            await update.message.reply_text(
-                f"❌ {message}",
+        except Exception as edit_error:
+            # If edit fails (e.g., message not modified), try to send new message
+            error_str = str(edit_error)
+            if "not modified" in error_str.lower():
+                # Message is same, ignore the error
+                pass
+            else:
+                # Other error, try to send new message
+                    try:
+                        await update.message.reply_text(
+                            formatted_message,
+                            reply_markup=keyboard,
+                            parse_mode="Markdown"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Error sending connection message: {e}")
+                        pass
+    except Exception as e:
+        error_msg = get_error_message(f"Connection error: {str(e)}")
+        try:
+            await connecting_msg.edit_text(
+                error_msg,
                 reply_markup=get_back_keyboard("menu_connect"),
                 parse_mode="Markdown"
             )
-    except Exception as e:
-        await update.message.reply_text(
-            get_error_message(f"Connection error: {str(e)}"),
-            reply_markup=get_back_keyboard("menu_connect"),
-            parse_mode="Markdown"
-        )
+        except Exception as edit_error:
+            # If edit fails, try to send new message
+            error_str = str(edit_error)
+            if "not modified" in error_str.lower():
+                # Message is same, ignore the error
+                pass
+            else:
+                    try:
+                        await update.message.reply_text(
+                            error_msg,
+                            reply_markup=get_back_keyboard("menu_connect"),
+                            parse_mode="Markdown"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Error sending error message: {e}")
+                        pass
     
     # Clear temporary data
     context.user_data.clear()
     return ConversationHandler.END
 
 async def connect_to_server(update: Update, context: ContextTypes.DEFAULT_TYPE):
- """Connect to server selected"""
- query = update.callback_query
- await query.answer()
- 
- server_id = int(query.data.split("_")[-1])
- user_id = update.effective_user.id
- 
- try:
-     with db_manager.get_session() as session:
-         server = session.query(Server).filter_by(id=server_id, user_id=user_id).first()
- 
-         if not server:
-             await query.edit_message_text(
-                 "Server not found.",
-                 reply_markup=get_back_keyboard("menu_servers")
-             )
-             return
- 
-         # Connect
-         success, message = ssh_manager.connect(user_id, server)
- 
-         await query.edit_message_text(
-            message,
-            reply_markup=get_back_keyboard("menu_main"),
-            parse_mode="Markdown"
-        )
- 
- except Exception as e:
-     await query.edit_message_text(
-         get_error_message(str(e)),
-         reply_markup=get_back_keyboard("menu_servers"),
-         parse_mode="Markdown"
-     )
+    """Connect to server selected"""
+    query = update.callback_query
+    await query.answer()
+    
+    server_id = int(query.data.split("_")[-1])
+    user_id = update.effective_user.id
+    
+    try:
+        with db_manager.get_session() as session:
+            server = session.query(Server).filter_by(id=server_id, user_id=user_id).first()
+            
+            if not server:
+                await query.edit_message_text(
+                    "Server not found.",
+                    reply_markup=get_back_keyboard("menu_servers")
+                )
+                return
+            
+            # Show connecting message first
+            try:
+                await query.edit_message_text(
+                    f"🔄 Connecting to {server.name}...",
+                    reply_markup=get_back_keyboard("menu_servers"),
+                    parse_mode="Markdown"
+                )
+            except Exception:
+                # Ignore if message is same or edit fails
+                pass
+            
+            # Connect
+            success, message = ssh_manager.connect(user_id, server)
+            
+            # Format message based on success
+            if success:
+                formatted_message = f"✅ {message}"
+            else:
+                formatted_message = f"❌ {message}"
+            
+            # Edit message with result - handle "message not modified" error
+            try:
+                await query.edit_message_text(
+                    formatted_message,
+                    reply_markup=get_back_keyboard("menu_main") if success else get_back_keyboard("menu_servers"),
+                    parse_mode="Markdown"
+                )
+            except Exception as edit_error:
+                # If edit fails (e.g., message not modified), try to send new message
+                error_str = str(edit_error)
+                if "not modified" in error_str.lower():
+                    # Message is same, ignore the error
+                    pass
+                else:
+                    # Other error, try to send new message
+                    try:
+                        await query.message.reply_text(
+                            formatted_message,
+                            reply_markup=get_back_keyboard("menu_main") if success else get_back_keyboard("menu_servers"),
+                            parse_mode="Markdown"
+                        )
+                    except Exception:
+                        pass
+    
+    except Exception as e:
+        error_msg = get_error_message(str(e))
+        try:
+            await query.edit_message_text(
+                error_msg,
+                reply_markup=get_back_keyboard("menu_servers"),
+                parse_mode="Markdown"
+            )
+        except Exception as edit_error:
+            # If edit fails, try to send new message
+            error_str = str(edit_error)
+            if "not modified" in error_str.lower():
+                # Message is same, ignore the error
+                pass
+            else:
+                    try:
+                        await query.message.reply_text(
+                            error_msg,
+                            reply_markup=get_back_keyboard("menu_servers"),
+                            parse_mode="Markdown"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Error sending error message: {e}")
+                        pass
 
 async def server_disconnect(update: Update, context: ContextTypes.DEFAULT_TYPE):
  """Disconnect"""
@@ -814,15 +916,17 @@ async def edit_field_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  return WAITING_EDIT_VALUE
              server.name = new_value
  
-         elif field == "host":
-             is_valid_ip, ip_error = validate_ip(new_value)
-             if not is_valid_ip and (not new_value or len(new_value) > 255):
-                 await update.message.reply_text(
-                     f"{ip_error or 'Invalid host'}",
-                     reply_markup=get_back_keyboard(f"server_select_{server_id}")
-                 )
-                 return WAITING_EDIT_VALUE
-             server.host = new_value
+        elif field == "host":
+            is_valid_ip, ip_error = validate_ip(new_value)
+            if not is_valid_ip:
+                is_valid_hostname, hostname_error = validate_hostname(new_value)
+                if not is_valid_hostname:
+                    await update.message.reply_text(
+                        f"{hostname_error or ip_error or 'Invalid host'}",
+                        reply_markup=get_back_keyboard(f"server_select_{server_id}")
+                    )
+                    return WAITING_EDIT_VALUE
+            server.host = new_value
  
          elif field == "port":
              try:
