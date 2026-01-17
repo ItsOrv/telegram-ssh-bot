@@ -22,12 +22,14 @@ class DatabaseManager:
             return
         
         try:
-            # Create engine
+            # Create engine with connection pooling for better performance
             self.engine = create_engine(
                 settings.DATABASE_URL,
-                poolclass=NullPool,
-                echo=False,
-                pool_pre_ping=True
+                pool_size=5,
+                max_overflow=10,
+                pool_pre_ping=True,
+                pool_recycle=3600,  # Recycle connections after 1 hour
+                echo=False
             )
             
             # Create session factory
