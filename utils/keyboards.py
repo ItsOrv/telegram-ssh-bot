@@ -154,3 +154,12 @@ def get_back_keyboard(callback_data: str = "menu_main") -> InlineKeyboardMarkup:
     """Back button"""
     keyboard = [[InlineKeyboardButton("Back", callback_data=callback_data)]]
     return InlineKeyboardMarkup(keyboard)
+
+
+def get_command_output_keyboard() -> InlineKeyboardMarkup:
+    """Keyboard for command output with Reset Screen and Back buttons"""
+    keyboard = [
+        [InlineKeyboardButton("🔄 Reset Screen", callback_data="reset_screen")],
+        [InlineKeyboardButton("🔙 Back", callback_data="menu_main")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
