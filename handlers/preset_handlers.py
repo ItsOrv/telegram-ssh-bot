@@ -107,10 +107,10 @@ async def add_preset_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
     
     user_id = update.effective_user.id
- 
- try:
-     # Sanitize command
-     cleaned_command = sanitize_input(command)
+    
+    try:
+        # Sanitize command
+        cleaned_command = sanitize_input(command)
  
      with db_manager.get_session() as session:
          # Ensure user exists
