@@ -97,16 +97,16 @@ async def add_preset_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         context.user_data.clear()
         return ConversationHandler.END
- 
- # Show warning if exists
- if warning:
-     await update.message.reply_text(
-         f"*Warning:* {warning}\n\nDo you want to continue?",
-         reply_markup=get_back_keyboard("menu_presets"),
-         parse_mode="Markdown"
-     )
- 
- user_id = update.effective_user.id
+    
+    # Show warning if exists
+    if warning:
+        await update.message.reply_text(
+            f"*Warning:* {warning}\n\nDo you want to continue?",
+            reply_markup=get_back_keyboard("menu_presets"),
+            parse_mode="Markdown"
+        )
+    
+    user_id = update.effective_user.id
  
  try:
      # Sanitize command
