@@ -443,15 +443,15 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             output_text = output_text[:4000] + "\n\n... (output truncated)"
 
         try:
-                await status_msg.edit_text(
-                    output_text,
-                    parse_mode="HTML",
-                    reply_markup=get_command_output_keyboard()
-                )
-            except Exception as html_error:
-                logger.warning(f"HTML parsing error: {html_error}")
-                # If HTML fails, try to fix and retry with HTML
-                try:
+            await status_msg.edit_text(
+                output_text,
+                parse_mode="HTML",
+                reply_markup=get_command_output_keyboard()
+            )
+        except Exception as html_error:
+            logger.warning(f"HTML parsing error: {html_error}")
+            # If HTML fails, try to fix and retry with HTML
+            try:
                 # More aggressive escaping
                 if stdout:
                     stdout_escaped = stdout.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
