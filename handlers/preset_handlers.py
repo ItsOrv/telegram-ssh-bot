@@ -111,8 +111,8 @@ async def add_preset_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try:
         # Sanitize command
         cleaned_command = sanitize_input(command)
- 
-     with db_manager.get_session() as session:
+        
+        with db_manager.get_session() as session:
          # Ensure user exists
          user = await ensure_user_exists(user_id, session)
  
@@ -122,20 +122,20 @@ async def add_preset_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
              name=preset_name,
              command=cleaned_command
          )
-         session.add(new_preset)
-         session.commit()
- 
-         # Clear temporary data
-         context.user_data.clear()
- 
-         await update.message.reply_text(
-             f"preset command *{preset_name}* added.",
-             reply_markup=get_back_keyboard("menu_presets"),
-             parse_mode="Markdown"
-         )
-         return ConversationHandler.END
- 
- except Exception as e:
+            session.add(new_preset)
+            session.commit()
+            
+            # Clear temporary data
+            context.user_data.clear()
+            
+            await update.message.reply_text(
+                f"preset command *{preset_name}* added.",
+                reply_markup=get_back_keyboard("menu_presets"),
+                parse_mode="Markdown"
+            )
+            return ConversationHandler.END
+    
+    except Exception as e:
      await update.message.reply_text(
          get_error_message(f"Error adding command: {str(e)}"),
          reply_markup=get_back_keyboard("menu_presets"),
