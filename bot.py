@@ -269,17 +269,15 @@ async def callback_query_handler(update: Update, context):
      except Exception as e:
          logger.warning(f"Error editing message (menu_main): {e}")
          # Try to send new message if edit fails
-         except Exception as e:
-             logger.warning(f"Error sending message (menu_main fallback): {e}")
-             try:
-                 await query.message.reply_text(
-                     welcome_message,
-                     reply_markup=get_main_menu_keyboard(is_admin=is_admin),
-                     parse_mode="Markdown"
-                 )
-             except Exception as e2:
-                 logger.error(f"Failed to send message: {e2}")
-                 pass
+         try:
+             await query.message.reply_text(
+                 welcome_message,
+                 reply_markup=get_main_menu_keyboard(is_admin=is_admin),
+                 parse_mode="Markdown"
+             )
+         except Exception as e2:
+             logger.error(f"Failed to send message: {e2}")
+             pass
  elif data == "menu_help":
      try:
          await query.edit_message_text(
@@ -289,17 +287,15 @@ async def callback_query_handler(update: Update, context):
          )
      except Exception as e:
          logger.warning(f"Error editing message (menu_help): {e}")
-         except Exception as e:
-             logger.warning(f"Error sending help message (fallback): {e}")
-             try:
-                 await query.message.reply_text(
-                     get_help_message(),
-                     reply_markup=get_main_menu_keyboard(is_admin=is_admin),
-                     parse_mode="Markdown"
-                 )
-             except Exception as e2:
-                 logger.error(f"Failed to send help message: {e2}")
-                 pass
+         try:
+             await query.message.reply_text(
+                 get_help_message(),
+                 reply_markup=get_main_menu_keyboard(is_admin=is_admin),
+                 parse_mode="Markdown"
+             )
+         except Exception as e2:
+             logger.error(f"Failed to send help message: {e2}")
+             pass
  elif data == "menu_servers":
      await servers_menu(update, context)
  elif data == "server_add":
@@ -431,131 +427,131 @@ def main():
         for error in errors:
             logger.error(f" - {error}")
         return
- 
- # Initialize database
- try:
-     db_manager.initialize()
-     logger.info("Database initialized")
- except Exception as e:
-     logger.error(f"Error Initialize database: {e}")
-     return
- 
- # Create Application
- application = Application.builder().token(settings.TELEGRAM_TOKEN).build()
- 
- # Register handlers
- application.add_handler(CommandHandler("start", start_command))
- application.add_handler(CommandHandler("help", help_command))
- application.add_handler(CommandHandler("status", check_connection_status))
- application.add_handler(CommandHandler("send", send_input))
- 
- # ConversationHandler for adding server
- add_server_conv = ConversationHandler(
- entry_points=[CallbackQueryHandler(add_server_start, pattern="^server_add$")],
- states={
- WAITING_SERVER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_server_name)],
- WAITING_SERVER_HOST: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_server_host)],
- WAITING_SERVER_PORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_server_port)],
- WAITING_SERVER_USERNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_server_username)],
- WAITING_SERVER_PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_server_password)],
- },
- fallbacks=[
- CallbackQueryHandler(cancel, pattern="^cancel_"),
- CallbackQueryHandler(cancel, pattern="^menu_servers$"),
- CommandHandler("cancel", cancel)
- ],
- per_message=False,
- )
- application.add_handler(add_server_conv)
- 
- # ConversationHandler for Editing server
- edit_server_conv = ConversationHandler(
- entry_points=[CallbackQueryHandler(edit_field_select, pattern="^edit_field_")],
- states={
- WAITING_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_field_value)],
- },
- fallbacks=[
- CallbackQueryHandler(cancel, pattern="^cancel_"),
- CallbackQueryHandler(cancel, pattern="^server_select_"),
- CommandHandler("cancel", cancel)
- ],
- per_message=False,
- )
- application.add_handler(edit_server_conv)
- 
- # ConversationHandler for adding preset command
- add_preset_conv = ConversationHandler(
- entry_points=[CallbackQueryHandler(add_preset_start, pattern="^preset_add$")],
- states={
- WAITING_PRESET_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_preset_name)],
- WAITING_PRESET_COMMAND: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_preset_command)],
- },
- fallbacks=[
- CallbackQueryHandler(cancel_preset, pattern="^cancel_"),
- CallbackQueryHandler(cancel_preset, pattern="^menu_presets$")
- ],
- per_message=False,
- )
- application.add_handler(add_preset_conv)
- 
- # ConversationHandler for Direct Connect
- direct_connect_conv = ConversationHandler(
-     entry_points=[CallbackQueryHandler(direct_connect_start, pattern="^direct_connect$")],
-     states={
-         WAITING_DIRECT_HOST: [MessageHandler(filters.TEXT & ~filters.COMMAND, direct_connect_host)],
-         WAITING_DIRECT_PORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, direct_connect_port)],
-         WAITING_DIRECT_USERNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, direct_connect_username)],
-         WAITING_DIRECT_PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, direct_connect_password)],
-     },
-     fallbacks=[
-         CallbackQueryHandler(cancel, pattern="^cancel_"),
-         CallbackQueryHandler(cancel, pattern="^menu_connect$"),
-         CallbackQueryHandler(cancel, pattern="^menu_main$"),
-         CommandHandler("cancel", cancel)
-     ],
-     per_message=False,
- )
- application.add_handler(direct_connect_conv)
- 
- # Handler for command execution (must be after conversation handlers)
- async def execute_command_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
-     # Skip if user is in conversation
-     if (context.user_data.get("edit_server_id") or 
-         context.user_data.get("new_server_name") or 
-         context.user_data.get("new_preset_name") or
-         context.user_data.get("direct_host")):
-         return
-     # Check if waiting for input
-     if context.user_data.get("waiting_for_input"):
-         await send_input(update, context)
-         return
-     await execute_command(update, context)
- 
- application.add_handler(MessageHandler(
- filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
- execute_command_filter
- ))
- 
- # Handler for callback queries
- application.add_handler(CallbackQueryHandler(callback_query_handler))
- 
- # Error handler
- application.add_error_handler(error_handler)
- 
- # Start cleanup task (if job_queue is available)
- if application.job_queue:
-     application.job_queue.run_repeating(
-         cleanup_task,
-         interval=300,
-         first=300
-     )
-     logger.info("Cleanup task scheduled")
- else:
-     logger.warning("JobQueue not available, cleanup task disabled")
- 
- # Start bot
- logger.info("🚀 bot Starting...")
- application.run_polling(allowed_updates=Update.ALL_TYPES)
+    
+    # Initialize database
+    try:
+        db_manager.initialize()
+        logger.info("Database initialized")
+    except Exception as e:
+        logger.error(f"Error Initialize database: {e}")
+        return
+    
+    # Create Application
+    application = Application.builder().token(settings.TELEGRAM_TOKEN).build()
+    
+    # Register handlers
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("status", check_connection_status))
+    application.add_handler(CommandHandler("send", send_input))
+    
+    # ConversationHandler for adding server
+    add_server_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(add_server_start, pattern="^server_add$")],
+        states={
+            WAITING_SERVER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_server_name)],
+            WAITING_SERVER_HOST: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_server_host)],
+            WAITING_SERVER_PORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_server_port)],
+            WAITING_SERVER_USERNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_server_username)],
+            WAITING_SERVER_PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_server_password)],
+        },
+        fallbacks=[
+            CallbackQueryHandler(cancel, pattern="^cancel_"),
+            CallbackQueryHandler(cancel, pattern="^menu_servers$"),
+            CommandHandler("cancel", cancel)
+        ],
+        per_message=False,
+    )
+    application.add_handler(add_server_conv)
+    
+    # ConversationHandler for Editing server
+    edit_server_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(edit_field_select, pattern="^edit_field_")],
+        states={
+            WAITING_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_field_value)],
+        },
+        fallbacks=[
+            CallbackQueryHandler(cancel, pattern="^cancel_"),
+            CallbackQueryHandler(cancel, pattern="^server_select_"),
+            CommandHandler("cancel", cancel)
+        ],
+        per_message=False,
+    )
+    application.add_handler(edit_server_conv)
+    
+    # ConversationHandler for adding preset command
+    add_preset_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(add_preset_start, pattern="^preset_add$")],
+        states={
+            WAITING_PRESET_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_preset_name)],
+            WAITING_PRESET_COMMAND: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_preset_command)],
+        },
+        fallbacks=[
+            CallbackQueryHandler(cancel_preset, pattern="^cancel_"),
+            CallbackQueryHandler(cancel_preset, pattern="^menu_presets$")
+        ],
+        per_message=False,
+    )
+    application.add_handler(add_preset_conv)
+    
+    # ConversationHandler for Direct Connect
+    direct_connect_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(direct_connect_start, pattern="^direct_connect$")],
+        states={
+            WAITING_DIRECT_HOST: [MessageHandler(filters.TEXT & ~filters.COMMAND, direct_connect_host)],
+            WAITING_DIRECT_PORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, direct_connect_port)],
+            WAITING_DIRECT_USERNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, direct_connect_username)],
+            WAITING_DIRECT_PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, direct_connect_password)],
+        },
+        fallbacks=[
+            CallbackQueryHandler(cancel, pattern="^cancel_"),
+            CallbackQueryHandler(cancel, pattern="^menu_connect$"),
+            CallbackQueryHandler(cancel, pattern="^menu_main$"),
+            CommandHandler("cancel", cancel)
+        ],
+        per_message=False,
+    )
+    application.add_handler(direct_connect_conv)
+    
+    # Handler for command execution (must be after conversation handlers)
+    async def execute_command_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        # Skip if user is in conversation
+        if (context.user_data.get("edit_server_id") or 
+            context.user_data.get("new_server_name") or 
+            context.user_data.get("new_preset_name") or
+            context.user_data.get("direct_host")):
+            return
+        # Check if waiting for input
+        if context.user_data.get("waiting_for_input"):
+            await send_input(update, context)
+            return
+        await execute_command(update, context)
+    
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
+        execute_command_filter
+    ))
+    
+    # Handler for callback queries
+    application.add_handler(CallbackQueryHandler(callback_query_handler))
+    
+    # Error handler
+    application.add_error_handler(error_handler)
+    
+    # Start cleanup task (if job_queue is available)
+    if application.job_queue:
+        application.job_queue.run_repeating(
+            cleanup_task,
+            interval=300,
+            first=300
+        )
+        logger.info("Cleanup task scheduled")
+    else:
+        logger.warning("JobQueue not available, cleanup task disabled")
+    
+    # Start bot
+    logger.info("🚀 bot Starting...")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
  main()
