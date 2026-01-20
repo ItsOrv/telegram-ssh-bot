@@ -100,12 +100,12 @@ async def add_server_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return WAITING_SERVER_HOST
     
     context.user_data["new_server_host"] = host
- await update.message.reply_text(
- f"Host: *{host}*\n\nEnter port (default: 22):",
- reply_markup=get_back_keyboard("menu_servers"),
- parse_mode="Markdown"
- )
- return WAITING_SERVER_PORT
+    await update.message.reply_text(
+        f"Host: *{host}*\n\nEnter port (default: 22):",
+        reply_markup=get_back_keyboard("menu_servers"),
+        parse_mode="Markdown"
+    )
+    return WAITING_SERVER_PORT
 
 async def add_server_port(update: Update, context: ContextTypes.DEFAULT_TYPE):
  """Get port"""
