@@ -226,9 +226,9 @@ async def preset_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
              )
              return
  
-         # Show executing message
-         await query.edit_message_text(f"Executing: *{preset.name}*...", parse_mode="Markdown")
- 
+        # Show executing message
+        await query.edit_message_text(f"Executing: *{preset.name}*...", parse_mode="Markdown")
+        
         # Execute command with logging
         import time
         from utils.logger import log_command_execution
