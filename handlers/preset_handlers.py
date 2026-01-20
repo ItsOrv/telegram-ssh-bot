@@ -281,13 +281,13 @@ async def preset_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown",
                 reply_markup=get_back_keyboard("preset_list")
             )
- 
- except Exception as e:
-     await query.edit_message_text(
-         get_error_message(f"Error executing command: {str(e)}"),
-         reply_markup=get_back_keyboard("preset_list"),
-         parse_mode="Markdown"
-     )
+    
+    except Exception as e:
+        await query.edit_message_text(
+            get_error_message(f"Error executing command: {str(e)}"),
+            reply_markup=get_back_keyboard("preset_list"),
+            parse_mode="Markdown"
+        )
 
 async def preset_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
  """Delete preset command (with confirmation)"""
