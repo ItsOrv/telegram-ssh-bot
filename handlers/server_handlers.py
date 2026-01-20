@@ -85,9 +85,9 @@ async def add_server_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
  return WAITING_SERVER_HOST
 
 async def add_server_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
- """Get Host"""
- host = update.message.text.strip()
- 
+    """Get Host"""
+    host = update.message.text.strip()
+    
     # Validate host (IP or hostname)
     is_valid_ip, ip_error = validate_ip(host)
     if not is_valid_ip:
@@ -98,8 +98,8 @@ async def add_server_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=get_back_keyboard("menu_servers")
             )
             return WAITING_SERVER_HOST
- 
- context.user_data["new_server_host"] = host
+    
+    context.user_data["new_server_host"] = host
  await update.message.reply_text(
  f"Host: *{host}*\n\nEnter port (default: 22):",
  reply_markup=get_back_keyboard("menu_servers"),
