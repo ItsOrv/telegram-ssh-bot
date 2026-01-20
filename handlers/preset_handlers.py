@@ -224,63 +224,63 @@ async def preset_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "Preset command not found.",
                     reply_markup=get_back_keyboard("preset_list")
                 )
-                return
+            return
             
             # Show executing message
             await query.edit_message_text(f"Executing: *{preset.name}*...", parse_mode="Markdown")
-        
-        # Execute command with logging
-        import time
-        from utils.logger import log_command_execution
-        from ssh.manager import ssh_manager
-        
-        command_start_time = time.time()
-        success, stdout, stderr = ssh_executor.execute_command(user_id, preset.command)
-        execution_time = time.time() - command_start_time
-        
-        # Log command execution
-        info = ssh_manager.get_connection_info(user_id)
-        server_id = info.get("server_id") if info else None
-        
-        log_command_execution(
-            user_id=user_id,
-            command=preset.command,
-            success=success,
-            output_length=len(stdout) if stdout else 0,
-            error_length=len(stderr) if stderr else 0,
-            execution_time=execution_time,
-            server_id=server_id
-        )
- 
-         if not success:
-             await query.edit_message_text(
-                 get_error_message(stderr or "Command execution error"),
-                 reply_markup=get_back_keyboard("preset_list"),
-                 parse_mode="Markdown"
-             )
-             return
- 
-         # Format output
-         output_text = f"*Command:* `{preset.command}`\n\n"
- 
-         if stdout:
-             output_text += f"*Output:*\n{format_command_output(stdout)}\n\n"
- 
-         if stderr:
-             output_text += f"*Error:*\n{format_command_output(stderr)}\n\n"
- 
-         if not stdout and not stderr:
-             output_text += "Command executed (no output)"
- 
-         # Limit message length
-         if len(output_text) > 4000:
-             output_text = output_text[:4000] + "\n\n... (Output truncated)"
- 
-         await query.edit_message_text(
-             output_text,
-             parse_mode="Markdown",
-             reply_markup=get_back_keyboard("preset_list")
-         )
+            
+            # Execute command with logging
+            import time
+            from utils.logger import log_command_execution
+            from ssh.manager import ssh_manager
+            
+            command_start_time = time.time()
+            success, stdout, stderr = ssh_executor.execute_command(user_id, preset.command)
+            execution_time = time.time() - command_start_time
+            
+            # Log command execution
+            info = ssh_manager.get_connection_info(user_id)
+            server_id = info.get("server_id") if info else None
+            
+            log_command_execution(
+                user_id=user_id,
+                command=preset.command,
+                success=success,
+                output_length=len(stdout) if stdout else 0,
+                error_length=len(stderr) if stderr else 0,
+                execution_time=execution_time,
+                server_id=server_id
+            )
+            
+            if not success:
+                await query.edit_message_text(
+                    get_error_message(stderr or "Command execution error"),
+                    reply_markup=get_back_keyboard("preset_list"),
+                    parse_mode="Markdown"
+                )
+                return
+            
+            # Format output
+            output_text = f"*Command:* `{preset.command}`\n\n"
+            
+            if stdout:
+                output_text += f"*Output:*\n{format_command_output(stdout)}\n\n"
+            
+            if stderr:
+                output_text += f"*Error:*\n{format_command_output(stderr)}\n\n"
+            
+            if not stdout and not stderr:
+                output_text += "Command executed (no output)"
+            
+            # Limit message length
+            if len(output_text) > 4000:
+                output_text = output_text[:4000] + "\n\n... (Output truncated)"
+            
+            await query.edit_message_text(
+                output_text,
+                parse_mode="Markdown",
+                reply_markup=get_back_keyboard("preset_list")
+            )
  
  except Exception as e:
      await query.edit_message_text(
