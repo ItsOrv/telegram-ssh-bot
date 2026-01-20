@@ -199,35 +199,35 @@ async def list_presets(update: Update, context: ContextTypes.DEFAULT_TYPE):
          await update.message.reply_text(error_msg, parse_mode="Markdown")
 
 async def preset_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
- """Execute command preset"""
- query = update.callback_query
- await query.answer()
- 
- preset_id = int(query.data.split("_")[-1])
- user_id = update.effective_user.id
- 
- # Check connection
- if not ssh_manager.is_connected(user_id):
-     await query.edit_message_text(
-         f"{get_connection_status_message(False)}\n\nConnect to a server first.",
-         reply_markup=get_back_keyboard("preset_list"),
-         parse_mode="Markdown"
-     )
-     return
- 
- try:
-     with db_manager.get_session() as session:
-         preset = session.query(PresetCommand).filter_by(id=preset_id, user_id=user_id).first()
- 
-         if not preset:
-             await query.edit_message_text(
-                 "Preset command not found.",
-                 reply_markup=get_back_keyboard("preset_list")
-             )
-             return
- 
-        # Show executing message
-        await query.edit_message_text(f"Executing: *{preset.name}*...", parse_mode="Markdown")
+    """Execute command preset"""
+    query = update.callback_query
+    await query.answer()
+    
+    preset_id = int(query.data.split("_")[-1])
+    user_id = update.effective_user.id
+    
+    # Check connection
+    if not ssh_manager.is_connected(user_id):
+        await query.edit_message_text(
+            f"{get_connection_status_message(False)}\n\nConnect to a server first.",
+            reply_markup=get_back_keyboard("preset_list"),
+            parse_mode="Markdown"
+        )
+        return
+    
+    try:
+        with db_manager.get_session() as session:
+            preset = session.query(PresetCommand).filter_by(id=preset_id, user_id=user_id).first()
+            
+            if not preset:
+                await query.edit_message_text(
+                    "Preset command not found.",
+                    reply_markup=get_back_keyboard("preset_list")
+                )
+                return
+            
+            # Show executing message
+            await query.edit_message_text(f"Executing: *{preset.name}*...", parse_mode="Markdown")
         
         # Execute command with logging
         import time
