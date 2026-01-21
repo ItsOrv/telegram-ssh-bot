@@ -879,23 +879,23 @@ async def edit_field_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
      return ConversationHandler.END
 
 async def edit_field_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
- """Get new value and save"""
- server_id = context.user_data.get("edit_server_id")
- field = context.user_data.get("edit_field")
- 
- if not server_id or not field:
-     await update.message.reply_text(
-         "Error getting information. Please try again.",
-         reply_markup=get_back_keyboard("server_list")
-     )
-     context.user_data.clear()
-     return ConversationHandler.END
- 
- user_id = update.effective_user.id
- new_value = update.message.text.strip()
- 
- try:
-     with db_manager.get_session() as session:
+    """Get new value and save"""
+    server_id = context.user_data.get("edit_server_id")
+    field = context.user_data.get("edit_field")
+    
+    if not server_id or not field:
+        await update.message.reply_text(
+            "Error getting information. Please try again.",
+            reply_markup=get_back_keyboard("server_list")
+        )
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    user_id = update.effective_user.id
+    new_value = update.message.text.strip()
+    
+    try:
+        with db_manager.get_session() as session:
          server = session.query(Server).filter_by(id=server_id, user_id=user_id).first()
  
          if not server:
@@ -913,7 +913,7 @@ async def edit_field_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
                      "Server name max 100 characters.",
                      reply_markup=get_back_keyboard(f"server_select_{server_id}")
                  )
-                 return WAITING_EDIT_VALUE
+                return WAITING_EDIT_VALUE
             server.name = new_value
         
         elif field == "host":
@@ -927,8 +927,8 @@ async def edit_field_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     return WAITING_EDIT_VALUE
             server.host = new_value
- 
-         elif field == "port":
+        
+        elif field == "port":
              try:
                  port = int(new_value)
                  is_valid, error = validate_port(port)
