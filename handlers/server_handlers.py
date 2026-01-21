@@ -964,19 +964,19 @@ async def edit_field_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return WAITING_EDIT_VALUE
             # Encrypt new password
             server.encrypted_password = encrypt_password(user_id, new_value)
- 
-         session.commit()
- 
-         # Clear temporary data
-         context.user_data.clear()
- 
-         await update.message.reply_text(
-             f"Field updated.",
-             reply_markup=get_back_keyboard(f"server_select_{server_id}"),
-             parse_mode="Markdown"
-         )
- 
-         return ConversationHandler.END
+        
+        session.commit()
+        
+        # Clear temporary data
+        context.user_data.clear()
+        
+        await update.message.reply_text(
+            f"Field updated.",
+            reply_markup=get_back_keyboard(f"server_select_{server_id}"),
+            parse_mode="Markdown"
+        )
+        
+        return ConversationHandler.END
  
  except Exception as e:
      await update.message.reply_text(
