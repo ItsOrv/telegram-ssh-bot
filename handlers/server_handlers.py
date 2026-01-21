@@ -913,7 +913,7 @@ async def edit_field_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
                      "Server name max 100 characters.",
                      reply_markup=get_back_keyboard(f"server_select_{server_id}")
                  )
-                return WAITING_EDIT_VALUE
+            return WAITING_EDIT_VALUE
             server.name = new_value
         
         elif field == "host":
