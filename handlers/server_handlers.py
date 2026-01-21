@@ -914,8 +914,8 @@ async def edit_field_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
                      reply_markup=get_back_keyboard(f"server_select_{server_id}")
                  )
                  return WAITING_EDIT_VALUE
-             server.name = new_value
- 
+            server.name = new_value
+        
         elif field == "host":
             is_valid_ip, ip_error = validate_ip(new_value)
             if not is_valid_ip:
