@@ -929,41 +929,41 @@ async def edit_field_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
             server.host = new_value
         
         elif field == "port":
-             try:
-                 port = int(new_value)
-                 is_valid, error = validate_port(port)
-                 if not is_valid:
-                     await update.message.reply_text(
-                         f"{error}",
-                         reply_markup=get_back_keyboard(f"server_select_{server_id}")
-                     )
-                     return WAITING_EDIT_VALUE
-                 server.port = port
-             except ValueError:
-                 await update.message.reply_text(
-                     "Port must be a number.",
-                     reply_markup=get_back_keyboard(f"server_select_{server_id}")
-                 )
-                 return WAITING_EDIT_VALUE
- 
-         elif field == "username":
-             if not new_value or len(new_value) > 100:
-                 await update.message.reply_text(
-                     "Invalid username.",
-                     reply_markup=get_back_keyboard(f"server_select_{server_id}")
-                 )
-                 return WAITING_EDIT_VALUE
-             server.username = new_value
- 
-         elif field == "password":
-             if not new_value:
-                 await update.message.reply_text(
-                     "Password cannot be empty.",
-                     reply_markup=get_back_keyboard(f"server_select_{server_id}")
-                 )
-                 return WAITING_EDIT_VALUE
-             # Encrypt new password
-             server.encrypted_password = encrypt_password(user_id, new_value)
+            try:
+                port = int(new_value)
+                is_valid, error = validate_port(port)
+                if not is_valid:
+                    await update.message.reply_text(
+                        f"{error}",
+                        reply_markup=get_back_keyboard(f"server_select_{server_id}")
+                    )
+                    return WAITING_EDIT_VALUE
+                server.port = port
+            except ValueError:
+                await update.message.reply_text(
+                    "Port must be a number.",
+                    reply_markup=get_back_keyboard(f"server_select_{server_id}")
+                )
+                return WAITING_EDIT_VALUE
+        
+        elif field == "username":
+            if not new_value or len(new_value) > 100:
+                await update.message.reply_text(
+                    "Invalid username.",
+                    reply_markup=get_back_keyboard(f"server_select_{server_id}")
+                )
+                return WAITING_EDIT_VALUE
+            server.username = new_value
+        
+        elif field == "password":
+            if not new_value:
+                await update.message.reply_text(
+                    "Password cannot be empty.",
+                    reply_markup=get_back_keyboard(f"server_select_{server_id}")
+                )
+                return WAITING_EDIT_VALUE
+            # Encrypt new password
+            server.encrypted_password = encrypt_password(user_id, new_value)
  
          session.commit()
  
