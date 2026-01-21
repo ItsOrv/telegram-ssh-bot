@@ -906,14 +906,14 @@ async def edit_field_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
              context.user_data.clear()
              return ConversationHandler.END
  
-         # Validate and update
-         if field == "name":
-             if len(new_value) > 100:
-                 await update.message.reply_text(
-                     "Server name max 100 characters.",
-                     reply_markup=get_back_keyboard(f"server_select_{server_id}")
-                 )
-            return WAITING_EDIT_VALUE
+        # Validate and update
+        if field == "name":
+            if len(new_value) > 100:
+                await update.message.reply_text(
+                    "Server name max 100 characters.",
+                    reply_markup=get_back_keyboard(f"server_select_{server_id}")
+                )
+                return WAITING_EDIT_VALUE
             server.name = new_value
         
         elif field == "host":
