@@ -114,8 +114,8 @@ class CommandHistory(Base):
     executed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     
     # Relationships
-    user = relationship("User")
-    server = relationship("Server")
+    user = relationship("User", overlaps="command_history,user_ref")
+    server = relationship("Server", overlaps="command_history,server_ref")
     
     # Indexes
     __table_args__ = (
