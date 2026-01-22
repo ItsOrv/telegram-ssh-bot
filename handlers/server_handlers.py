@@ -977,15 +977,15 @@ async def edit_field_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         return ConversationHandler.END
- 
- except Exception as e:
-     await update.message.reply_text(
-         get_error_message(f"Error editing: {str(e)}"),
-         reply_markup=get_back_keyboard("server_list"),
-         parse_mode="Markdown"
-     )
-     context.user_data.clear()
-     return ConversationHandler.END
+    
+    except Exception as e:
+        await update.message.reply_text(
+            get_error_message(f"Error editing: {str(e)}"),
+            reply_markup=get_back_keyboard("server_list"),
+            parse_mode="Markdown"
+        )
+        context.user_data.clear()
+        return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
  """Cancel operation"""
