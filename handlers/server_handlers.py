@@ -2,6 +2,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from typing import Dict
+import asyncio
 from database.connection import db_manager
 from database.models import User, Server
 from security.encryption import encrypt_password
@@ -588,9 +589,9 @@ async def direct_connect_password(update: Update, context: ContextTypes.DEFAULT_
         parse_mode="Markdown"
     )
     
-    # Connect
+    # Connect (run in thread to avoid blocking event loop)
     try:
-        success, message = ssh_manager.connect(user_id, temp_server)
+        success, message = await asyncio.to_thread(ssh_manager.connect, user_id, temp_server)
         
         # Format message based on success
         if success:
@@ -683,8 +684,8 @@ async def connect_to_server(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Ignore if message is same or edit fails
                 pass
             
-            # Connect
-            success, message = ssh_manager.connect(user_id, server)
+            # Connect (run in thread to avoid blocking event loop)
+            success, message = await asyncio.to_thread(ssh_manager.connect, user_id, server)
             
             # Format message based on success
             if success:

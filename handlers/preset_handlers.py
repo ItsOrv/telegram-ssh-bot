@@ -235,7 +235,9 @@ async def preset_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from ssh.manager import ssh_manager
             
             command_start_time = time.time()
-            success, stdout, stderr = ssh_executor.execute_command(user_id, preset.command)
+            # Run in thread to avoid blocking event loop
+            import asyncio
+            success, stdout, stderr = await asyncio.to_thread(ssh_executor.execute_command, user_id, preset.command)
             execution_time = time.time() - command_start_time
             
             # Log command execution
