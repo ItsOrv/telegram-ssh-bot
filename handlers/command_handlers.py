@@ -94,37 +94,37 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
      await update.message.reply_text(
          get_warning_message(warning),
          parse_mode="Markdown"
-     )
- 
-    # Sanitize command
-    cleaned_command = sanitize_input(command)
+    )
 
-    # Cancel any previous command execution task for this user
-    if f"command_task_{user_id}" in context.user_data:
-        prev_task = context.user_data.get(f"command_task_{user_id}")
-        if prev_task and not prev_task.done():
-            prev_task.cancel()
-        if f"command_running_{user_id}" in context.user_data:
-            context.user_data[f"command_running_{user_id}"] = False
+ # Sanitize command
+ cleaned_command = sanitize_input(command)
 
-    # Show initial status
-    status_msg = await update.message.reply_text("Executing command...")
+ # Cancel any previous command execution task for this user
+ if f"command_task_{user_id}" in context.user_data:
+     prev_task = context.user_data.get(f"command_task_{user_id}")
+     if prev_task and not prev_task.done():
+         prev_task.cancel()
+     if f"command_running_{user_id}" in context.user_data:
+         context.user_data[f"command_running_{user_id}"] = False
 
-    # Store the latest status message for this user
-    context.user_data[f"latest_status_msg_{user_id}"] = status_msg
+ # Show initial status
+ status_msg = await update.message.reply_text("Executing command...")
 
-    # Store output lines for real-time updates
-    output_lines = []
-    error_lines = []
-    command_start_time = time.time()  # Track when command started
-    last_update_time = time.time()
-    update_lock = asyncio.Lock()
-    update_interval = 2.0  # Update every 2 seconds - always
-    show_executing_duration = 2.0  # Show "Executing..." for first 2 seconds only
-    command_running = True
-    context.user_data[f"command_running_{user_id}"] = True
+ # Store the latest status message for this user
+ context.user_data[f"latest_status_msg_{user_id}"] = status_msg
 
-    async def update_message_display(force_update=False):
+ # Store output lines for real-time updates
+ output_lines = []
+ error_lines = []
+ command_start_time = time.time()  # Track when command started
+ last_update_time = time.time()
+ update_lock = asyncio.Lock()
+ update_interval = 2.0  # Update every 2 seconds - always
+ show_executing_duration = 2.0  # Show "Executing..." for first 2 seconds only
+ command_running = True
+ context.user_data[f"command_running_{user_id}"] = True
+
+ async def update_message_display(force_update=False):
         """Update message with last 4 lines - always update every 2 seconds"""
         nonlocal last_update_time, command_running, output_lines, error_lines, status_msg, command_start_time, show_executing_duration, update_lock
         
