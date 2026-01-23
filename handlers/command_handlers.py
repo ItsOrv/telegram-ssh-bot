@@ -725,81 +725,87 @@ async def reset_screen(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(f"Error editing reset message: {e}")
                 pass
         
-        # Kill existing screen session - try multiple methods
-        try:
-            stdin_kill, stdout_kill, stderr_kill = ssh_client.exec_command(
-                f"screen -S {screen_session} -X quit 2>/dev/null || true",
+        # Run reset operations in thread to avoid blocking
+        def _reset_screen_sync():
+            """Synchronous reset screen operations"""
+            # Kill existing screen session - try multiple methods
+            try:
+                stdin_kill, stdout_kill, stderr_kill = ssh_client.exec_command(
+                    f"screen -S {screen_session} -X quit 2>/dev/null || true",
+                    timeout=3
+                )
+                stdout_kill.read()
+                stderr_kill.read()
+            except Exception as e:
+                logger.debug(f"Error killing screen session: {e}")
+                pass
+            
+            # Also try pkill as backup
+            try:
+                stdin_pkill, stdout_pkill, stderr_pkill = ssh_client.exec_command(
+                    f"pkill -f 'screen.*{screen_session}' 2>/dev/null || true",
+                    timeout=2
+                )
+                stdout_pkill.read()
+            except Exception as e:
+                logger.debug(f"Error pkill screen session: {e}")
+                pass
+            
+            # Wait a bit for screen to close completely
+            time.sleep(1)
+            
+            # Verify screen is closed
+            try:
+                stdin_check, stdout_check, stderr_check = ssh_client.exec_command(
+                    f"screen -list | grep -q '{screen_session}' && echo 'exists' || echo 'notfound'",
+                    timeout=2
+                )
+                check_result = stdout_check.read().decode('utf-8', errors='replace').strip()
+                if check_result == 'exists':
+                    # Screen still exists, force kill
+                    ssh_client.exec_command(f"pkill -9 -f 'screen.*{screen_session}' 2>/dev/null || true", timeout=2)
+                    time.sleep(0.5)
+            except Exception as e:
+                logger.debug(f"Error force killing screen: {e}")
+                pass
+            
+            # Create new screen session
+            stdin_new, stdout_new, stderr_new = ssh_client.exec_command(
+                f"screen -dmS {screen_session} bash",
                 timeout=3
             )
-            stdout_kill.read()
-            stderr_kill.read()
-        except Exception as e:
-            logger.debug(f"Error killing screen session: {e}")
-            pass
+            stdout_new.read()
+            stderr_new.read()
+            
+            # Wait a bit for screen to initialize
+            time.sleep(0.5)
+            
+            # Verify screen was created
+            try:
+                stdin_verify, stdout_verify, stderr_verify = ssh_client.exec_command(
+                    f"screen -list | grep -q '{screen_session}' && echo 'created' || echo 'failed'",
+                    timeout=2
+                )
+                verify_result = stdout_verify.read().decode('utf-8', errors='replace').strip()
+                if verify_result != 'created':
+                    raise Exception("Failed to create new screen session")
+            except Exception as verify_error:
+                raise Exception(f"Screen verification failed: {str(verify_error)}")
+            
+            # Clear log file
+            log_file = f"/tmp/sshbot_log_{user_id}"
+            try:
+                stdin_clear, stdout_clear, stderr_clear = ssh_client.exec_command(
+                    f"rm -f {log_file} 2>/dev/null || true",
+                    timeout=2
+                )
+                stdout_clear.read()
+            except Exception as e:
+                logger.debug(f"Error clearing log file: {e}")
+                pass
         
-        # Also try pkill as backup
-        try:
-            stdin_pkill, stdout_pkill, stderr_pkill = ssh_client.exec_command(
-                f"pkill -f 'screen.*{screen_session}' 2>/dev/null || true",
-                timeout=2
-            )
-            stdout_pkill.read()
-        except Exception as e:
-            logger.debug(f"Error pkill screen session: {e}")
-            pass
-        
-        # Wait a bit for screen to close completely
-        time.sleep(1)
-        
-        # Verify screen is closed
-        try:
-            stdin_check, stdout_check, stderr_check = ssh_client.exec_command(
-                f"screen -list | grep -q '{screen_session}' && echo 'exists' || echo 'notfound'",
-                timeout=2
-            )
-            check_result = stdout_check.read().decode('utf-8', errors='replace').strip()
-            if check_result == 'exists':
-                # Screen still exists, force kill
-                ssh_client.exec_command(f"pkill -9 -f 'screen.*{screen_session}' 2>/dev/null || true", timeout=2)
-                time.sleep(0.5)
-        except Exception as e:
-            logger.debug(f"Error force killing screen: {e}")
-            pass
-        
-        # Create new screen session
-        stdin_new, stdout_new, stderr_new = ssh_client.exec_command(
-            f"screen -dmS {screen_session} bash",
-            timeout=3
-        )
-        stdout_new.read()
-        stderr_new.read()
-        
-        # Wait a bit for screen to initialize
-        time.sleep(0.5)
-        
-        # Verify screen was created
-        try:
-            stdin_verify, stdout_verify, stderr_verify = ssh_client.exec_command(
-                f"screen -list | grep -q '{screen_session}' && echo 'created' || echo 'failed'",
-                timeout=2
-            )
-            verify_result = stdout_verify.read().decode('utf-8', errors='replace').strip()
-            if verify_result != 'created':
-                raise Exception("Failed to create new screen session")
-        except Exception as verify_error:
-            raise Exception(f"Screen verification failed: {str(verify_error)}")
-        
-        # Clear log file
-        log_file = f"/tmp/sshbot_log_{user_id}"
-        try:
-            stdin_clear, stdout_clear, stderr_clear = ssh_client.exec_command(
-                f"rm -f {log_file} 2>/dev/null || true",
-                timeout=2
-            )
-            stdout_clear.read()
-        except Exception as e:
-            logger.debug(f"Error clearing log file: {e}")
-            pass
+        # Run in thread
+        await asyncio.to_thread(_reset_screen_sync)
         
         message = "✅ Screen session reset successfully!\n\nA new clean screen session has been created."
         
