@@ -248,14 +248,24 @@ class SSHManager:
             pass
     
     def cleanup_idle_connections(self):
-        """Cleanup idle connections"""
+        """Cleanup idle connections (non-blocking check)"""
         current_time = datetime.now(timezone.utc)
         timeout = timedelta(seconds=settings.CONNECTION_TIMEOUT)
         
         users_to_disconnect = []
-        for user_id, info in self._connection_info.items():
+        for user_id, info in list(self._connection_info.items()):
             if current_time - info["connected_at"] > timeout:
                 users_to_disconnect.append(user_id)
+            else:
+                # Quick non-blocking check - just verify transport is active
+                if user_id in self._connections:
+                    try:
+                        ssh_client = self._connections[user_id]
+                        transport = ssh_client.get_transport()
+                        if not transport or not transport.is_active():
+                            users_to_disconnect.append(user_id)
+                    except Exception:
+                        users_to_disconnect.append(user_id)
         
         for user_id in users_to_disconnect:
             self._cleanup_connection(user_id)
