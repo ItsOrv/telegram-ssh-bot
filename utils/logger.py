@@ -43,20 +43,30 @@ def log_command_execution(
             f"(success={success}, time={execution_time}s)"
         )
         
-        # Save to database
-        with db_manager.get_session() as session:
-            history_entry = CommandHistory(
-                user_id=user_id,
-                server_id=server_id,
-                command=command[:1000],  # Limit command length for storage
-                success=success,
-                output_length=output_length,
-                error_length=error_length,
-                execution_time=int(execution_time) if execution_time else None,
-                executed_at=datetime.utcnow()
-            )
-            session.add(history_entry)
-            session.commit()
+        # Save to database (run in thread to avoid blocking)
+        import asyncio
+        import threading
+        
+        def _save_to_db():
+            try:
+                with db_manager.get_session() as session:
+                    history_entry = CommandHistory(
+                        user_id=user_id,
+                        server_id=server_id,
+                        command=command[:1000],  # Limit command length for storage
+                        success=success,
+                        output_length=output_length,
+                        error_length=error_length,
+                        execution_time=int(execution_time) if execution_time else None,
+                        executed_at=datetime.utcnow()
+                    )
+                    session.add(history_entry)
+                    session.commit()
+            except Exception as db_error:
+                command_logger.error(f"Database save error: {db_error}")
+        
+        # Run in background thread (non-blocking)
+        threading.Thread(target=_save_to_db, daemon=True).start()
     except Exception as e:
         # Don't fail command execution if logging fails
         command_logger.error(f"Failed to log command execution: {e}", exc_info=True)
