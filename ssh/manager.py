@@ -178,8 +178,13 @@ class SSHManager:
         except Exception as e:
             return False, f"Disconnect error: {str(e)}"
     
-    def is_connected(self, user_id: int) -> bool:
-        """Check connection and perform health check"""
+    def is_connected(self, user_id: int, perform_health_check: bool = False) -> bool:
+        """
+        Check connection status
+        Args:
+            user_id: User ID
+            perform_health_check: If True, performs a blocking health check (use only in threads)
+        """
         if user_id not in self._connections:
             return False
         
@@ -188,17 +193,21 @@ class SSHManager:
             ssh_client = self._connections[user_id]
             transport = ssh_client.get_transport()
             if transport and transport.is_active():
-                # Perform health check with a simple command
-                try:
-                    # Try to execute a simple command to verify connection
-                    stdin, stdout, stderr = ssh_client.exec_command("echo 'health_check'", timeout=2)
-                    stdout.read()
+                # Only perform health check if explicitly requested (and in thread)
+                if perform_health_check:
+                    try:
+                        # Try to execute a simple command to verify connection
+                        stdin, stdout, stderr = ssh_client.exec_command("echo 'health_check'", timeout=2)
+                        stdout.read()
+                        return True
+                    except Exception as health_error:
+                        logger.warning(f"Health check failed for user {user_id}: {health_error}")
+                        # Connection might be dead, cleanup
+                        self._cleanup_connection(user_id)
+                        return False
+                else:
+                    # Just check transport status (non-blocking)
                     return True
-                except Exception as health_error:
-                    logger.warning(f"Health check failed for user {user_id}: {health_error}")
-                    # Connection might be dead, cleanup
-                    self._cleanup_connection(user_id)
-                    return False
             else:
                 # Connection closed, cleanup
                 self._cleanup_connection(user_id)
