@@ -625,7 +625,8 @@ async def send_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await update.message.reply_text("Sending input to screen session...")
     
     try:
-        success, message = ssh_executor.send_input(user_id, input_text)
+        # Run in thread to avoid blocking event loop
+        success, message = await asyncio.to_thread(ssh_executor.send_input, user_id, input_text)
         
         if success:
             # Escape input for security (prevent XSS/injection)
