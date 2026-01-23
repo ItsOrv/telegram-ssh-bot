@@ -626,7 +626,7 @@ async def connect_to_server(update: Update, context: ContextTypes.DEFAULT_TYPE):
          # Connect
          success, message = ssh_manager.connect(user_id, server)
  
-        await query.edit_message_text(
+         await query.edit_message_text(
             message,
             reply_markup=get_back_keyboard("menu_main"),
             parse_mode="Markdown"
