@@ -232,10 +232,14 @@ async def list_servers(update: Update, context: ContextTypes.DEFAULT_TYPE):
  user_id = update.effective_user.id
  
  try:
-     with db_manager.get_session() as session:
-         servers = session.query(Server).filter_by(user_id=user_id).all()
+     # Run database query in thread to avoid blocking
+     def _get_servers():
+         with db_manager.get_session() as session:
+             return session.query(Server).filter_by(user_id=user_id).all()
+     
+     servers = await asyncio.to_thread(_get_servers)
  
-         if not servers:
+     if not servers:
              message = "No servers.\n\nYou can add a new server from the Server Management menu."
              if query:
                  await query.edit_message_text(
@@ -286,24 +290,28 @@ async def server_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
  user_id = update.effective_user.id
  
  try:
-     with db_manager.get_session() as session:
-         server = session.query(Server).filter_by(id=server_id, user_id=user_id).first()
+     # Run database query in thread to avoid blocking
+     def _get_server():
+         with db_manager.get_session() as session:
+             return session.query(Server).filter_by(id=server_id, user_id=user_id).first()
+     
+     server = await asyncio.to_thread(_get_server)
  
-         if not server:
-             await query.edit_message_text(
-                 "Server not found.",
-                 reply_markup=get_back_keyboard("server_list")
-             )
-             return
- 
-         message = get_server_info_message(server.name, server.host, server.port, server.username)
-         keyboard = get_server_actions_keyboard(server_id)
- 
+     if not server:
          await query.edit_message_text(
-             message,
-             reply_markup=keyboard,
-             parse_mode="Markdown"
+             "Server not found.",
+             reply_markup=get_back_keyboard("server_list")
          )
+         return
+ 
+     message = get_server_info_message(server.name, server.host, server.port, server.username)
+     keyboard = get_server_actions_keyboard(server_id)
+ 
+     await query.edit_message_text(
+         message,
+         reply_markup=keyboard,
+         parse_mode="Markdown"
+     )
  
  except Exception as e:
      await query.edit_message_text(
@@ -354,19 +362,20 @@ async def server_delete_confirm(update: Update, context: ContextTypes.DEFAULT_TY
  user_id = update.effective_user.id
  
  try:
-     with db_manager.get_session() as session:
-         server = session.query(Server).filter_by(id=server_id, user_id=user_id).first()
- 
-         if not server:
-             await query.edit_message_text(
-                 "Server not found.",
-                 reply_markup=get_back_keyboard("server_list")
-             )
-             return
- 
-         server_name = server.name
-         session.delete(server)
-         session.commit()
+     # Run database operation in thread to avoid blocking
+     def _delete_server():
+         with db_manager.get_session() as session:
+             server = session.query(Server).filter_by(id=server_id, user_id=user_id).first()
+             if server:
+                 server_name = server.name
+                 session.delete(server)
+                 # Context manager will commit automatically
+                 return server_name
+             return None
+     
+     server_name = await asyncio.to_thread(_delete_server)
+     
+     if not server_name:
  
          await query.edit_message_text(
              f"server *{server_name}* deleted.",

@@ -99,16 +99,22 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
      return
  
  try:
-     with db_manager.get_session() as session:
-         total_users = session.query(User).count()
-         total_servers = session.query(Server).count()
-         total_presets = session.query(PresetCommand).count()
- 
-         # Check public mode
-         admin_user = session.query(User).filter_by(user_id=user_id).first()
-         public_mode = admin_user.public_mode_enabled if admin_user else False
- 
-         message = f"""
+     # Run database queries in thread to avoid blocking
+     def _get_stats():
+         with db_manager.get_session() as session:
+             total_users = session.query(User).count()
+             total_servers = session.query(Server).count()
+             total_presets = session.query(PresetCommand).count()
+             
+             # Check public mode
+             admin_user = session.query(User).filter_by(user_id=user_id).first()
+             public_mode = admin_user.public_mode_enabled if admin_user else False
+             
+             return total_users, total_servers, total_presets, public_mode
+     
+     total_users, total_servers, total_presets, public_mode = await asyncio.to_thread(_get_stats)
+     
+     message = f"""
 *Bot Statistics*
 
 *Users:* {total_users}

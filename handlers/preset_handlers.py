@@ -118,18 +118,22 @@ async def add_preset_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Sanitize command
         cleaned_command = sanitize_input(command)
         
-        with db_manager.get_session() as session:
-            # Ensure user exists
-            user = await ensure_user_exists(user_id, session)
-            
-            # Create new preset command
-            new_preset = PresetCommand(
-                user_id=user_id,
-                name=preset_name,
-                command=cleaned_command
-            )
-            session.add(new_preset)
-            session.commit()
+        # Run database operation in thread to avoid blocking
+        def _add_preset():
+            with db_manager.get_session() as session:
+                # Ensure user exists
+                ensure_user_exists_sync(user_id, session)
+                
+                # Create new preset command
+                new_preset = PresetCommand(
+                    user_id=user_id,
+                    name=preset_name,
+                    command=cleaned_command
+                )
+                session.add(new_preset)
+                # Context manager will commit automatically
+        
+        await asyncio.to_thread(_add_preset)
         
         # Clear temporary data
         context.user_data.clear()
@@ -159,10 +163,14 @@ async def list_presets(update: Update, context: ContextTypes.DEFAULT_TYPE):
  user_id = update.effective_user.id
  
  try:
-     with db_manager.get_session() as session:
-         presets = session.query(PresetCommand).filter_by(user_id=user_id).all()
+     # Run database query in thread to avoid blocking
+     def _get_presets():
+         with db_manager.get_session() as session:
+             return session.query(PresetCommand).filter_by(user_id=user_id).all()
+     
+     presets = await asyncio.to_thread(_get_presets)
  
-         if not presets:
+     if not presets:
              message = "No preset commands.\n\nYou can add a new command from the Preset Commands menu."
              if query:
                  await query.edit_message_text(
@@ -222,18 +230,22 @@ async def preset_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
-        with db_manager.get_session() as session:
-            preset = session.query(PresetCommand).filter_by(id=preset_id, user_id=user_id).first()
-            
-            if not preset:
-                await query.edit_message_text(
-                    "Preset command not found.",
-                    reply_markup=get_back_keyboard("preset_list")
-                )
+        # Run database query in thread to avoid blocking
+        def _get_preset():
+            with db_manager.get_session() as session:
+                return session.query(PresetCommand).filter_by(id=preset_id, user_id=user_id).first()
+        
+        preset = await asyncio.to_thread(_get_preset)
+        
+        if not preset:
+            await query.edit_message_text(
+                "Preset command not found.",
+                reply_markup=get_back_keyboard("preset_list")
+            )
             return
-            
-            # Show executing message
-            await query.edit_message_text(f"Executing: *{preset.name}*...", parse_mode="Markdown")
+        
+        # Show executing message
+        await query.edit_message_text(f"Executing: *{preset.name}*...", parse_mode="Markdown")
             
             # Execute command with logging
             import time
@@ -340,19 +352,20 @@ async def preset_delete_confirm(update: Update, context: ContextTypes.DEFAULT_TY
  user_id = update.effective_user.id
  
  try:
-     with db_manager.get_session() as session:
-         preset = session.query(PresetCommand).filter_by(id=preset_id, user_id=user_id).first()
- 
-         if not preset:
-             await query.edit_message_text(
-                 "Preset command not found.",
-                 reply_markup=get_back_keyboard("preset_list")
-             )
-             return
- 
-         preset_name = preset.name
-         session.delete(preset)
-         # Context manager will commit automatically
+     # Run database operation in thread to avoid blocking
+     def _delete_preset():
+         with db_manager.get_session() as session:
+             preset = session.query(PresetCommand).filter_by(id=preset_id, user_id=user_id).first()
+             if preset:
+                 preset_name = preset.name
+                 session.delete(preset)
+                 # Context manager will commit automatically
+                 return preset_name
+             return None
+     
+     preset_name = await asyncio.to_thread(_delete_preset)
+     
+     if not preset_name:
  
          await query.edit_message_text(
              f"preset command *{preset_name}* deleted.",

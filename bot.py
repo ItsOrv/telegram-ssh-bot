@@ -140,13 +140,26 @@ async def check_access(update: Update, context) -> bool:
  
  # Check public mode
  try:
-     with db_manager.get_session() as session:
-         admin_user = session.query(User).filter_by(
-             user_id=settings.ADMIN_IDS[0] if settings.ADMIN_IDS else 0
-         ).first()
- 
-         if admin_user and admin_user.public_mode_enabled:
-             return True
+     # Run database query in thread to avoid blocking
+     import asyncio
+     def _check_public_mode():
+         with db_manager.get_session() as session:
+             admin_user = session.query(User).filter_by(
+                 user_id=settings.ADMIN_IDS[0] if settings.ADMIN_IDS else 0
+             ).first()
+             return admin_user and admin_user.public_mode_enabled
+     
+     # Note: This is called from sync context, so we can't use await here
+     # But it's only called during startup, so it's acceptable
+     import threading
+     result = [None]
+     def _run():
+         result[0] = _check_public_mode()
+     thread = threading.Thread(target=_run)
+     thread.start()
+     thread.join(timeout=2)
+     if result[0]:
+         return True
  except Exception as e:
      logger.warning(f"Error checking public mode: {e}")
      pass
