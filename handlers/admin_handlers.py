@@ -63,7 +63,7 @@ async def toggle_public_mode(update: Update, context: ContextTypes.DEFAULT_TYPE)
  
          # Toggle mode
          user.public_mode_enabled = not user.public_mode_enabled
-         session.commit()
+         # Context manager will commit automatically
  
          new_status = "enabled" if user.public_mode_enabled else "disabled"
          message = f"Public mode *{new_status}*."

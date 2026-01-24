@@ -30,14 +30,19 @@ from config.settings import settings
  WAITING_EDIT_VALUE,
  WAITING_DIRECT_HOST, WAITING_DIRECT_PORT, WAITING_DIRECT_USERNAME, WAITING_DIRECT_PASSWORD) = range(10)
 
+def ensure_user_exists_sync(user_id: int, session):
+    """Ensure user exists in database (synchronous version for thread execution)"""
+    user = session.query(User).filter_by(user_id=user_id).first()
+    if not user:
+        user = User(user_id=user_id, is_admin=user_id in settings.ADMIN_IDS)
+        session.add(user)
+        # Context manager will commit automatically
+    return user
+
 async def ensure_user_exists(user_id: int, session):
- """Ensure user exists in database"""
- user = session.query(User).filter_by(user_id=user_id).first()
- if not user:
-     user = User(user_id=user_id, is_admin=user_id in settings.ADMIN_IDS)
-     session.add(user)
-     session.commit()
- return user
+    """Ensure user exists in database (async wrapper)"""
+    # Run in thread to avoid blocking
+    return await asyncio.to_thread(ensure_user_exists_sync, user_id, session)
 
 async def servers_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
  """Server management menu"""

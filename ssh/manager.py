@@ -123,13 +123,13 @@ class SSHManager:
                 self._connection_info[user_id]["screen_session"] = None
                 pass
             
-            # Save to database
+            # Save to database (context manager auto-commits, no need for manual commit)
             with db_manager.get_session() as session:
                 # Remove old connection if exists
                 old_connection = session.query(DBConnection).filter_by(user_id=user_id).first()
                 if old_connection:
                     session.delete(old_connection)
-                    session.commit()  # Commit delete before inserting new one
+                    # Context manager will commit
                 
                 # Create new connection
                 new_connection = DBConnection(
@@ -137,7 +137,7 @@ class SSHManager:
                     server_id=server.id
                 )
                 session.add(new_connection)
-                session.commit()  # Commit the new connection
+                # Context manager will commit automatically
             
             return True, f"Successfully connected to server {server.name}"
         
@@ -166,12 +166,12 @@ class SSHManager:
             if user_id in self._connection_info:
                 del self._connection_info[user_id]
             
-            # Remove from database
+            # Remove from database (context manager auto-commits)
             with db_manager.get_session() as session:
                 connection = session.query(DBConnection).filter_by(user_id=user_id).first()
                 if connection:
                     session.delete(connection)
-                    session.commit()
+                    # Context manager will commit automatically
             
             return True, "Connection closed"
         

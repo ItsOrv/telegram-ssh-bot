@@ -15,14 +15,20 @@ from utils.keyboards import (
 from utils.messages import get_error_message, get_success_message, format_command_output, get_connection_status_message
 from config.settings import settings
 
+def ensure_user_exists_sync(user_id: int, session):
+    """Ensure user exists in database (synchronous version for thread execution)"""
+    user = session.query(User).filter_by(user_id=user_id).first()
+    if not user:
+        user = User(user_id=user_id, is_admin=user_id in settings.ADMIN_IDS)
+        session.add(user)
+        # Context manager will commit automatically
+    return user
+
 async def ensure_user_exists(user_id: int, session):
- """Ensure user exists in database"""
- user = session.query(User).filter_by(user_id=user_id).first()
- if not user:
-     user = User(user_id=user_id, is_admin=user_id in settings.ADMIN_IDS)
-     session.add(user)
-     session.commit()
- return user
+    """Ensure user exists in database (async wrapper)"""
+    # Run in thread to avoid blocking
+    import asyncio
+    return await asyncio.to_thread(ensure_user_exists_sync, user_id, session)
 
 # States for ConversationHandler
 (WAITING_PRESET_NAME, WAITING_PRESET_COMMAND) = range(2)
@@ -346,7 +352,7 @@ async def preset_delete_confirm(update: Update, context: ContextTypes.DEFAULT_TY
  
          preset_name = preset.name
          session.delete(preset)
-         session.commit()
+         # Context manager will commit automatically
  
          await query.edit_message_text(
              f"preset command *{preset_name}* deleted.",
