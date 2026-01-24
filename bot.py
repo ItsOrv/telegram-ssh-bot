@@ -182,17 +182,21 @@ async def start_command(update: Update, context):
  
  user_id = update.effective_user.id
  
- # Create or update user
+ # Create or update user (run in thread to avoid blocking)
  try:
-     with db_manager.get_session() as session:
-         user = session.query(User).filter_by(user_id=user_id).first()
-         if not user:
-             user = User(
-                 user_id=user_id,
-                 is_admin=settings.is_admin(user_id)
-             )
-             session.add(user)
-             session.commit()
+     def _create_user():
+         with db_manager.get_session() as session:
+             user = session.query(User).filter_by(user_id=user_id).first()
+             if not user:
+                 user = User(
+                     user_id=user_id,
+                     is_admin=settings.is_admin(user_id)
+                 )
+                 session.add(user)
+                 # Context manager will commit automatically
+             return user
+     
+     await asyncio.to_thread(_create_user)
  except Exception as e:
      logger.error(f"Error creating user: {e}")
  

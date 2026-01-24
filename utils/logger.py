@@ -61,7 +61,7 @@ def log_command_execution(
                         executed_at=datetime.utcnow()
                     )
                     session.add(history_entry)
-                    session.commit()
+                    # Context manager will commit automatically
             except Exception as db_error:
                 command_logger.error(f"Database save error: {db_error}")
         

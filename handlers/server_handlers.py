@@ -186,24 +186,28 @@ async def add_server_password(update: Update, context: ContextTypes.DEFAULT_TYPE
  user_id = update.effective_user.id
  
  try:
-     with db_manager.get_session() as session:
-         # Ensure user exists
-         user = await ensure_user_exists(user_id, session)
- 
-         # Encrypt password
-         encrypted_password = encrypt_password(user_id, password)
- 
-         # Create new server
-         new_server = Server(
-             user_id=user_id,
-             name=server_name,
-             host=host,
-             port=port,
-             username=username,
-             encrypted_password=encrypted_password
-         )
-         session.add(new_server)
-         session.commit()
+     # Encrypt password first (before database operation)
+     encrypted_password = encrypt_password(user_id, password)
+     
+     # Run database operation in thread to avoid blocking
+     def _add_server():
+         with db_manager.get_session() as session:
+             # Ensure user exists
+             ensure_user_exists_sync(user_id, session)
+             
+             # Create new server
+             new_server = Server(
+                 user_id=user_id,
+                 name=server_name,
+                 host=host,
+                 port=port,
+                 username=username,
+                 encrypted_password=encrypted_password
+             )
+             session.add(new_server)
+             # Context manager will commit automatically
+     
+     await asyncio.to_thread(_add_server)
  
          # Clear temporary data
          context.user_data.clear()
