@@ -123,18 +123,18 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Public Mode:* {'enabled' if public_mode else 'disabled'}
 """
  
-         if query:
-             await query.edit_message_text(
-                 message,
-                 reply_markup=get_back_keyboard("menu_main"),
-                 parse_mode="Markdown"
-             )
-         else:
-             await update.message.reply_text(
-                 message,
-                 reply_markup=get_back_keyboard("menu_main"),
-                 parse_mode="Markdown"
-             )
+     if query:
+         await query.edit_message_text(
+             message,
+             reply_markup=get_back_keyboard("menu_main"),
+             parse_mode="Markdown"
+         )
+     else:
+         await update.message.reply_text(
+             message,
+             reply_markup=get_back_keyboard("menu_main"),
+             parse_mode="Markdown"
+         )
  
  except Exception as e:
      error_msg = get_error_message(str(e))
