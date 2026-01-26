@@ -1,5 +1,10 @@
 """SQLAlchemy models"""
-from datetime import datetime
+from datetime import datetime, timezone
+
+def _utc_now():
+    """Timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
+    return datetime.now(timezone.utc)
+
 from sqlalchemy import Column, Integer, BigInteger, String, Boolean, DateTime, ForeignKey, Text, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -15,8 +20,8 @@ class User(Base):
     user_id = Column(BigInteger, primary_key=True, unique=True, nullable=False)
     is_admin = Column(Boolean, default=False, nullable=False)
     public_mode_enabled = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utc_now, nullable=False)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now, nullable=False)
     
     # Relationships
     servers = relationship("Server", back_populates="user", cascade="all, delete-orphan")
@@ -41,18 +46,17 @@ class Server(Base):
     port = Column(Integer, default=22, nullable=False)
     username = Column(String(100), nullable=False)
     encrypted_password = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utc_now, nullable=False)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now, nullable=False)
     
     # Relationships
     user = relationship("User", back_populates="servers")
     connections = relationship("Connection", back_populates="server", cascade="all, delete-orphan")
     command_history = relationship("CommandHistory", backref="server_ref")
     
-    # Indexes
+    # Indexes (id is PK, already indexed)
     __table_args__ = (
         Index('idx_servers_user_id', 'user_id'),
-        Index('idx_servers_id', 'id'),
     )
 
 
@@ -64,7 +68,7 @@ class PresetCommand(Base):
     user_id = Column(BigInteger, ForeignKey("users.user_id"), nullable=False)
     name = Column(String(100), nullable=False)
     command = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utc_now, nullable=False)
     
     # Relationships
     user = relationship("User", back_populates="preset_commands")
@@ -76,13 +80,13 @@ class PresetCommand(Base):
 
 
 class BlockedCommand(Base):
-    """Blocked command model (global)"""
+    """Reserved for future use: admin-managed blocked command patterns from DB (validator currently uses DANGEROUS_COMMANDS list)."""
     __tablename__ = "blocked_commands"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     pattern = Column(String(255), unique=True, nullable=False)
     description = Column(String(500))
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utc_now, nullable=False)
 
 
 class Connection(Base):
@@ -92,7 +96,7 @@ class Connection(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.user_id"), nullable=False, unique=True)
     server_id = Column(Integer, ForeignKey("servers.id"), nullable=False)
-    connected_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    connected_at = Column(DateTime, default=_utc_now, nullable=False)
     
     # Relationships
     user = relationship("User", back_populates="connections")
@@ -111,7 +115,7 @@ class CommandHistory(Base):
     output_length = Column(Integer, default=0)
     error_length = Column(Integer, default=0)
     execution_time = Column(Integer, nullable=True)  # in seconds
-    executed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    executed_at = Column(DateTime, default=_utc_now, nullable=False, index=True)
     
     # Relationships
     user = relationship("User", overlaps="command_history,user_ref")

@@ -1,7 +1,6 @@
 """PostgreSQL connection management"""
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import NullPool
 from contextlib import contextmanager
 from typing import Generator
 from config.settings import settings
@@ -61,12 +60,6 @@ class DatabaseManager:
             raise
         finally:
             session.close()
-    
-    def get_session_direct(self) -> Session:
-        """Get session directly (without context manager)"""
-        if not self._initialized:
-            self.initialize()
-        return self.SessionLocal()
     
     def close(self):
         """Close connection"""
