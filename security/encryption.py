@@ -1,19 +1,14 @@
 """Encryption and decryption with user key"""
-import hashlib
 import base64
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.backends import default_backend
 from config.settings import settings
 
 
 def derive_user_key(user_id: int) -> bytes:
-    """Generate unique key for each user"""
-    # Combine master key with user_id
+    """Generate unique key for each user (32 bytes for AES-256)."""
     combined = f"{settings.MASTER_ENCRYPTION_KEY}_{user_id}".encode()
-    
-    # Use SHA-256 to generate 32-byte key
-    digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+    digest = hashes.Hash(hashes.SHA256())
     digest.update(combined)
     return digest.finalize()
 
