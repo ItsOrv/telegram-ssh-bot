@@ -1,7 +1,7 @@
 """Logging utilities for command execution and security events"""
 import logging
 import functools
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from database.connection import db_manager
 from database.models import CommandHistory
@@ -37,16 +37,20 @@ def log_command_execution(
         server_id: Server ID if connected
     """
     try:
+        # Sanitize command for logging (remove potential sensitive data)
+        # Remove passwords, tokens, and other sensitive patterns
+        import re
+        sanitized_command = command[:100]
+        # Remove common sensitive patterns
+        sanitized_command = re.sub(r'(password|pwd|pass|token|key|secret)\s*[=:]\s*\S+', r'\1=***', sanitized_command, flags=re.IGNORECASE)
+        
         # Log to file
         command_logger.info(
-            f"User {user_id} executed command: {command[:100]} "
+            f"User {user_id} executed command: {sanitized_command} "
             f"(success={success}, time={execution_time}s)"
         )
         
-        # Save to database (run in thread to avoid blocking)
-        import asyncio
-        import threading
-        
+        # Save to database: use event loop executor when in async context to avoid unbounded threads
         def _save_to_db():
             try:
                 with db_manager.get_session() as session:
@@ -58,15 +62,21 @@ def log_command_execution(
                         output_length=output_length,
                         error_length=error_length,
                         execution_time=int(execution_time) if execution_time else None,
-                        executed_at=datetime.utcnow()
+                        executed_at=datetime.now(timezone.utc)
                     )
                     session.add(history_entry)
                     # Context manager will commit automatically
             except Exception as db_error:
                 command_logger.error(f"Database save error: {db_error}")
         
-        # Run in background thread (non-blocking)
-        threading.Thread(target=_save_to_db, daemon=True).start()
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+            loop.run_in_executor(None, _save_to_db)
+        except RuntimeError:
+            # No running event loop (e.g. script); fall back to daemon thread
+            import threading
+            threading.Thread(target=_save_to_db, daemon=True).start()
     except Exception as e:
         # Don't fail command execution if logging fails
         command_logger.error(f"Failed to log command execution: {e}", exc_info=True)
