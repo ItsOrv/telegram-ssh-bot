@@ -34,8 +34,10 @@ class Settings:
     CONNECTION_TIMEOUT: int = int(os.getenv("CONNECTION_TIMEOUT", "1800"))
     MAX_COMMAND_LENGTH: int = int(os.getenv("MAX_COMMAND_LENGTH", "1000"))
     RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "30"))
+    # Thread pool size (default 15 for low-resource; increase if you have more RAM/CPU)
+    THREAD_POOL_MAX_WORKERS: int = int(os.getenv("THREAD_POOL_MAX_WORKERS", "15"))
     
-    # Optional IP Whitelist
+    # Optional IP Whitelist (not enforced in current polling implementation; for future webhook use)
     IP_WHITELIST: List[str] = [
         ip.strip()
         for ip in os.getenv("IP_WHITELIST", "").split(",")
@@ -82,6 +84,8 @@ class Settings:
             errors.append("MAX_COMMAND_LENGTH must be positive")
         if cls.RATE_LIMIT_PER_MINUTE <= 0:
             errors.append("RATE_LIMIT_PER_MINUTE must be positive")
+        if cls.THREAD_POOL_MAX_WORKERS < 1 or cls.THREAD_POOL_MAX_WORKERS > 128:
+            errors.append("THREAD_POOL_MAX_WORKERS must be between 1 and 128")
         
         return len(errors) == 0, errors
     
