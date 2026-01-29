@@ -1,7 +1,6 @@
 """Command execution handlers"""
 import asyncio
 import time
-import concurrent.futures
 import logging
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -11,12 +10,14 @@ from security.validator import validate_command, sanitize_input
 from utils.messages import format_command_output, get_error_message, get_warning_message, get_connection_status_message
 from utils.keyboards import get_back_keyboard, get_command_output_keyboard
 from utils.logger import log_command_execution, log_security_event
+from utils.message_helpers import safe_reply_or_edit
+from utils.constants import (
+    MAX_OUTPUT_LENGTH, MAX_ERROR_LENGTH, LAST_LINES_COUNT, UPDATE_INTERVAL
+)
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
-
-# Thread pool executor for blocking operations
-_executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
+# Use default event loop executor (single shared pool in bot.py) to reduce memory and threads
 
 async def execute_command_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
  """Command execution menu"""
@@ -30,18 +31,14 @@ async def execute_command_menu(update: Update, context: ContextTypes.DEFAULT_TYP
  if not ssh_manager.is_connected(user_id):
      info = ssh_manager.get_connection_info(user_id)
      message = f"{get_connection_status_message(False)}\n\nConnect to a server first."
-     if query:
-         await query.edit_message_text(
-             message,
-             reply_markup=get_back_keyboard("menu_main"),
-             parse_mode="Markdown"
-         )
-     else:
-         await update.message.reply_text(
-             message,
-             reply_markup=get_back_keyboard("menu_main"),
-             parse_mode="Markdown"
-         )
+     from utils.message_helpers import safe_reply_or_edit
+     await safe_reply_or_edit(
+         update,
+         context,
+         message,
+         reply_markup=get_back_keyboard("menu_main"),
+         parse_mode="Markdown"
+     )
      return
  
  info = ssh_manager.get_connection_info(user_id)
@@ -54,20 +51,15 @@ async def execute_command_menu(update: Update, context: ContextTypes.DEFAULT_TYP
      [InlineKeyboardButton("🔙 Back", callback_data="menu_main")]
  ]
  reply_markup = InlineKeyboardMarkup(keyboard)
- 
+
  message = f"*Execute Command*\n\nConnected to: *{server_name}*\n\nEnter command:\n\n💡 Tip: Use /send <input> to send input to interactive commands"
- if query:
-     await query.edit_message_text(
-         message,
-         reply_markup=reply_markup,
-         parse_mode="Markdown"
-     )
- else:
-     await update.message.reply_text(
-         message,
-         reply_markup=reply_markup,
-         parse_mode="Markdown"
-     )
+ await safe_reply_or_edit(
+     update,
+     context,
+     message,
+     reply_markup=reply_markup,
+     parse_mode="Markdown"
+ )
 
 async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Execute command with real-time output updates"""
@@ -79,7 +71,7 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     command = update.message.text.strip()
     
     # Check command execution rate limit
-    from bot import check_command_rate_limit
+    from utils.rate_limiter import check_command_rate_limit
     if not check_command_rate_limit(user_id):
         await update.message.reply_text(
             "⚠️ Rate limit exceeded for command execution. Please wait a moment before executing another command.",
@@ -147,7 +139,7 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     command_start_time = time.time()  # Track when command started
     last_update_time = time.time()
     update_lock = asyncio.Lock()
-    update_interval = 0.5  # Update every 0.5 seconds for faster updates
+    update_interval = UPDATE_INTERVAL  # Update interval for message display
     show_executing_duration = 2.0  # Show "Executing..." for first 2 seconds only
     command_running = True
     context.user_data[f"command_running_{user_id}"] = True
@@ -189,12 +181,12 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # No output yet, don't update message unnecessarily
                     return
                 
-                # Get last 4 lines (as requested)
-                last_4_lines = all_lines[-4:] if len(all_lines) >= 4 else all_lines
+                # Get last N lines (as requested)
+                last_lines = all_lines[-LAST_LINES_COUNT:] if len(all_lines) >= LAST_LINES_COUNT else all_lines
                 
                 # Format output - escape for HTML (safer than Markdown)
                 escaped_lines = []
-                for line in last_4_lines:
+                for line in last_lines:
                     # Escape HTML special characters only
                     escaped_line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                     escaped_lines.append(escaped_line)
@@ -212,8 +204,8 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # This is important for continuous commands where last 4 lines might be same but new lines added
                 
                 # Limit length
-                if len(display_text) > 4000:
-                    display_text = display_text[:4000] + "\n\n... (truncated)"
+                if len(display_text) > MAX_OUTPUT_LENGTH:
+                    display_text = display_text[:MAX_OUTPUT_LENGTH] + "\n\n... (truncated)"
                 
                 try:
                     await status_msg.edit_text(
@@ -341,10 +333,10 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_task = asyncio.create_task(periodic_update())
         context.user_data[f"command_task_{user_id}"] = update_task
         
-        # Execute command with real-time updates in thread pool to avoid blocking event loop
+        # Execute command with real-time updates in default thread pool (shared, set in bot.py)
         loop = asyncio.get_event_loop()
         success, stdout, stderr = await loop.run_in_executor(
-            _executor,
+            None,
             ssh_executor.execute_command_realtime,
             user_id,
             cleaned_command,
@@ -390,8 +382,8 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             error_msg = stderr or "Command execution error"
             error_msg = error_msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             # Limit error message length
-            if len(error_msg) > 3500:
-                error_msg = error_msg[:3500] + "\n\n... (truncated)"
+            if len(error_msg) > MAX_ERROR_LENGTH:
+                error_msg = error_msg[:MAX_ERROR_LENGTH] + "\n\n... (truncated)"
             try:
                 await status_msg.edit_text(
                     f"<b>Error:</b>\n<pre><code>{error_msg}</code></pre>",
@@ -403,7 +395,7 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # If HTML fails, try with simpler HTML
                 try:
                     await status_msg.edit_text(
-                        f"<b>Error:</b> {error_msg[:1000]}",
+                        f"<b>Error:</b> {error_msg[:MAX_ERROR_LENGTH]}",
                         parse_mode="HTML",
                         reply_markup=get_command_output_keyboard()
                     )
@@ -422,25 +414,25 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if stdout:
             # Escape HTML characters and limit length - show LAST part
             stdout_escaped = stdout.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            if len(stdout_escaped) > 3500:
-                # Get last 3500 characters (most recent output)
-                stdout_escaped = "... (output truncated)\n\n" + stdout_escaped[-3500:]
+            if len(stdout_escaped) > MAX_ERROR_LENGTH:
+                # Get last N characters (most recent output)
+                stdout_escaped = "... (output truncated)\n\n" + stdout_escaped[-MAX_ERROR_LENGTH:]
             output_text += f"<b>Output:</b>\n<pre><code>{stdout_escaped}</code></pre>\n\n"
 
         if stderr:
             # Escape HTML characters and limit length - show LAST part
             stderr_escaped = stderr.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            if len(stderr_escaped) > 3500:
-                # Get last 3500 characters (most recent output)
-                stderr_escaped = "... (output truncated)\n\n" + stderr_escaped[-3500:]
+            if len(stderr_escaped) > MAX_ERROR_LENGTH:
+                # Get last N characters (most recent output)
+                stderr_escaped = "... (output truncated)\n\n" + stderr_escaped[-MAX_ERROR_LENGTH:]
             output_text += f"<b>Error:</b>\n<pre><code>{stderr_escaped}</code></pre>\n\n"
 
         if not stdout and not stderr:
             output_text = "Command executed (no output)"
 
         # Limit total message length (max 4096 characters for Telegram)
-        if len(output_text) > 4000:
-            output_text = output_text[:4000] + "\n\n... (output truncated)"
+        if len(output_text) > MAX_OUTPUT_LENGTH:
+            output_text = output_text[:MAX_OUTPUT_LENGTH] + "\n\n... (output truncated)"
 
         try:
             await status_msg.edit_text(
@@ -455,20 +447,20 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # More aggressive escaping
                 if stdout:
                     stdout_escaped = stdout.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-                    if len(stdout_escaped) > 3500:
-                        stdout_escaped = "... (truncated)\n\n" + stdout_escaped[-3500:]
+                    if len(stdout_escaped) > MAX_ERROR_LENGTH:
+                        stdout_escaped = "... (truncated)\n\n" + stdout_escaped[-MAX_ERROR_LENGTH:]
                     output_text = f"<b>Output:</b>\n<pre><code>{stdout_escaped}</code></pre>"
                 else:
                     output_text = "<b>Output:</b>\n<pre><code>No output</code></pre>"
                 
                 if stderr:
                     stderr_escaped = stderr.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-                    if len(stderr_escaped) > 3500:
-                        stderr_escaped = "... (truncated)\n\n" + stderr_escaped[-3500:]
+                    if len(stderr_escaped) > MAX_ERROR_LENGTH:
+                        stderr_escaped = "... (truncated)\n\n" + stderr_escaped[-MAX_ERROR_LENGTH:]
                     output_text += f"\n\n<b>Error:</b>\n<pre><code>{stderr_escaped}</code></pre>"
                 
-                if len(output_text) > 4000:
-                    output_text = output_text[:4000] + "\n\n... (truncated)"
+                if len(output_text) > MAX_OUTPUT_LENGTH:
+                    output_text = output_text[:MAX_OUTPUT_LENGTH] + "\n\n... (truncated)"
                 
                 await status_msg.edit_text(
                     output_text,
@@ -510,8 +502,8 @@ async def execute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Escape error message for HTML (safer)
         error_msg = f"Command execution error: {str(e)}"
         error_msg = error_msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        if len(error_msg) > 3500:
-            error_msg = error_msg[:3500] + "\n\n... (truncated)"
+        if len(error_msg) > MAX_ERROR_LENGTH:
+            error_msg = error_msg[:MAX_ERROR_LENGTH] + "\n\n... (truncated)"
         try:
             await status_msg.edit_text(
                 f"<b>Error:</b>\n<pre><code>{error_msg}</code></pre>",
@@ -729,109 +721,90 @@ async def reset_screen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Run reset operations in thread to avoid blocking
         def _reset_screen_sync():
             """Synchronous reset screen operations"""
+            from ssh.utils import execute_ssh_command_safe
+            from utils.constants import SSH_SCREEN_CHECK_TIMEOUT, SCREEN_KILL_WAIT, SCREEN_INIT_WAIT
+            
             # Kill existing screen session - try multiple methods
-            try:
-                stdin_kill, stdout_kill, stderr_kill = ssh_client.exec_command(
-                    f"screen -S {screen_session} -X quit 2>/dev/null || true",
-                    timeout=3
-                )
-                stdout_kill.read()
-                stderr_kill.read()
-            except Exception as e:
-                logger.debug(f"Error killing screen session: {e}")
-                pass
+            execute_ssh_command_safe(
+                ssh_client,
+                f"screen -S {screen_session} -X quit 2>/dev/null || true",
+                timeout=SSH_SCREEN_CHECK_TIMEOUT
+            )
             
             # Also try pkill as backup
-            try:
-                stdin_pkill, stdout_pkill, stderr_pkill = ssh_client.exec_command(
-                    f"pkill -f 'screen.*{screen_session}' 2>/dev/null || true",
-                    timeout=2
-                )
-                stdout_pkill.read()
-            except Exception as e:
-                logger.debug(f"Error pkill screen session: {e}")
-                pass
+            execute_ssh_command_safe(
+                ssh_client,
+                f"pkill -f 'screen.*{screen_session}' 2>/dev/null || true",
+                timeout=SSH_SCREEN_CHECK_TIMEOUT
+            )
             
             # Wait a bit for screen to close completely
-            time.sleep(1)
+            time.sleep(SCREEN_KILL_WAIT)
             
             # Verify screen is closed
-            try:
-                stdin_check, stdout_check, stderr_check = ssh_client.exec_command(
-                    f"screen -list | grep -q '{screen_session}' && echo 'exists' || echo 'notfound'",
-                    timeout=2
+            stdout_check, _, _ = execute_ssh_command_safe(
+                ssh_client,
+                f"screen -list | grep -q '{screen_session}' && echo 'exists' || echo 'notfound'",
+                timeout=SSH_SCREEN_CHECK_TIMEOUT
+            )
+            check_result = stdout_check.strip() if stdout_check else 'notfound'
+            if check_result == 'exists':
+                # Screen still exists, force kill
+                execute_ssh_command_safe(
+                    ssh_client,
+                    f"pkill -9 -f 'screen.*{screen_session}' 2>/dev/null || true",
+                    timeout=SSH_SCREEN_CHECK_TIMEOUT
                 )
-                check_result = stdout_check.read().decode('utf-8', errors='replace').strip()
-                if check_result == 'exists':
-                    # Screen still exists, force kill
-                    ssh_client.exec_command(f"pkill -9 -f 'screen.*{screen_session}' 2>/dev/null || true", timeout=2)
-                    time.sleep(0.5)
-            except Exception as e:
-                logger.debug(f"Error force killing screen: {e}")
-                pass
+                time.sleep(SCREEN_INIT_WAIT)
             
             # Create new screen session
-            stdin_new, stdout_new, stderr_new = ssh_client.exec_command(
+            execute_ssh_command_safe(
+                ssh_client,
                 f"screen -dmS {screen_session} bash",
-                timeout=3
+                timeout=SSH_SCREEN_CHECK_TIMEOUT
             )
-            stdout_new.read()
-            stderr_new.read()
             
             # Wait a bit for screen to initialize
-            time.sleep(0.5)
+            time.sleep(SCREEN_INIT_WAIT)
             
             # Verify screen was created
-            try:
-                stdin_verify, stdout_verify, stderr_verify = ssh_client.exec_command(
-                    f"screen -list | grep -q '{screen_session}' && echo 'created' || echo 'failed'",
-                    timeout=2
-                )
-                verify_result = stdout_verify.read().decode('utf-8', errors='replace').strip()
-                if verify_result != 'created':
-                    raise Exception("Failed to create new screen session")
-            except Exception as verify_error:
-                raise Exception(f"Screen verification failed: {str(verify_error)}")
+            stdout_verify, _, _ = execute_ssh_command_safe(
+                ssh_client,
+                f"screen -list | grep -q '{screen_session}' && echo 'created' || echo 'failed'",
+                timeout=SSH_SCREEN_CHECK_TIMEOUT
+            )
+            verify_result = stdout_verify.strip() if stdout_verify else 'failed'
+            if verify_result != 'created':
+                raise Exception("Failed to create new screen session")
             
             # Clear log file
             log_file = f"/tmp/sshbot_log_{user_id}"
-            try:
-                stdin_clear, stdout_clear, stderr_clear = ssh_client.exec_command(
-                    f"rm -f {log_file} 2>/dev/null || true",
-                    timeout=2
-                )
-                stdout_clear.read()
-            except Exception as e:
-                logger.debug(f"Error clearing log file: {e}")
-                pass
+            execute_ssh_command_safe(
+                ssh_client,
+                f"rm -f {log_file} 2>/dev/null || true",
+                timeout=SSH_SCREEN_CHECK_TIMEOUT
+            )
         
         # Run in thread
         await asyncio.to_thread(_reset_screen_sync)
         
         message = "✅ Screen session reset successfully!\n\nA new clean screen session has been created."
         
-        if query:
-            await query.edit_message_text(
-                message,
-                reply_markup=get_back_keyboard("menu_main"),
-                parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text(
-                message,
-                reply_markup=get_back_keyboard("menu_main"),
-                parse_mode="Markdown"
-            )
+        from utils.message_helpers import safe_reply_or_edit
+        await safe_reply_or_edit(
+            update,
+            context,
+            message,
+            reply_markup=get_back_keyboard("menu_main"),
+            parse_mode="Markdown"
+        )
     
     except Exception as e:
         error_msg = f"❌ Error resetting screen: {str(e)}"
-        if query:
-            await query.edit_message_text(
-                error_msg,
-                reply_markup=get_back_keyboard("menu_main")
-            )
-        else:
-            await update.message.reply_text(
-                error_msg,
-                reply_markup=get_back_keyboard("menu_main")
-            )
+        from utils.message_helpers import safe_reply_or_edit
+        await safe_reply_or_edit(
+            update,
+            context,
+            error_msg,
+            reply_markup=get_back_keyboard("menu_main")
+        )
