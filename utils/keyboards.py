@@ -156,6 +156,12 @@ def get_back_keyboard(callback_data: str = "menu_main") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
+def get_cancel_connect_keyboard() -> InlineKeyboardMarkup:
+    """Cancel button for connecting state"""
+    keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_connect")]]
+    return InlineKeyboardMarkup(keyboard)
+
+
 def get_command_output_keyboard() -> InlineKeyboardMarkup:
     """Keyboard for command output with Reset Screen and Back buttons"""
     keyboard = [
