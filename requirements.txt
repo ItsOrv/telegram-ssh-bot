@@ -1,4 +1,4 @@
-python-telegram-bot>=20.7
+python-telegram-bot[job-queue]>=20.7
 paramiko>=3.4.0
 SQLAlchemy>=2.0.23
 psycopg2-binary>=2.9.9
