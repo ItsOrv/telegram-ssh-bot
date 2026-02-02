@@ -104,6 +104,9 @@ COMMAND_TIMEOUT=300
 CONNECTION_TIMEOUT=1800
 MAX_COMMAND_LENGTH=1000
 RATE_LIMIT_PER_MINUTE=30
+
+# Optional: thread pool size (default 15; increase on powerful servers)
+# THREAD_POOL_MAX_WORKERS=15
 ```
 
 **Important Notes:**
@@ -153,6 +156,14 @@ python bot.py
 1. From main menu, select "📝 Preset Commands"
 2. You can add frequently used commands
 3. For quick execution, use preset commands list
+
+### Performance and low-resource servers
+
+If the bot feels slow or the server has limited RAM/CPU:
+
+- **Thread pool**: Default is 15 workers. On a low-resource server keep it (or set `THREAD_POOL_MAX_WORKERS=8` in `.env`). On a powerful server you can set `THREAD_POOL_MAX_WORKERS=30` or higher.
+- **Database**: Runs on the same thread pool; public-mode checks are cached for ~45 seconds to reduce DB load.
+- **SSH**: Long-running commands hold a worker until they finish; avoid too many concurrent long commands.
 
 ### Public Mode
 
