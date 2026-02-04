@@ -28,15 +28,7 @@ async def ensure_user_exists(user_id: int) -> User:
 
 
 async def run_db_operation(operation: Callable[[], T]) -> T:
-    """
-    Run database operation in thread pool to avoid blocking event loop
-    
-    Args:
-        operation: Function that performs database operation (should use db_manager.get_session())
-    
-    Returns:
-        Result of the operation
-    """
+    """Run DB operation in thread pool."""
     return await asyncio.to_thread(operation)
 
 

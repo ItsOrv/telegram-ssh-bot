@@ -428,7 +428,7 @@ async def connect_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
-        # Run database query in thread to avoid blocking event loop
+        # db in thread
         def _get_servers_data():
             with db_manager.get_session() as session:
                 servers = session.query(Server).filter_by(user_id=user_id).all()
@@ -832,7 +832,7 @@ async def server_disconnect(update: Update, context: ContextTypes.DEFAULT_TYPE):
  
  user_id = update.effective_user.id
  
- # Run disconnect in thread to avoid blocking event loop
+ # disconnect in thread
  success, message = await asyncio.to_thread(ssh_manager.disconnect, user_id)
  
  if query:

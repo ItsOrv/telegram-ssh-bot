@@ -230,7 +230,7 @@ async def preset_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from ssh.manager import ssh_manager
         
         command_start_time = time.time()
-        # Run in thread to avoid blocking event loop
+        # in thread
         def _execute_preset():
             return ssh_executor.execute_command(user_id, preset.command)
         

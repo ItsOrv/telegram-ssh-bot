@@ -17,7 +17,6 @@ from utils.constants import (
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
-# Use default event loop executor (single shared pool in bot.py) to reduce memory and threads
 
 async def execute_command_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
  """Command execution menu"""
@@ -617,7 +616,7 @@ async def send_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await update.message.reply_text("Sending input to screen session...")
     
     try:
-        # Run in thread to avoid blocking event loop
+        # in thread
         success, message = await asyncio.to_thread(ssh_executor.send_input, user_id, input_text)
         
         if success:

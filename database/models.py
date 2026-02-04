@@ -2,7 +2,6 @@
 from datetime import datetime, timezone
 
 def _utc_now():
-    """Timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
     return datetime.now(timezone.utc)
 
 from sqlalchemy import Column, Integer, BigInteger, String, Boolean, DateTime, ForeignKey, Text, Index
@@ -80,7 +79,7 @@ class PresetCommand(Base):
 
 
 class BlockedCommand(Base):
-    """Reserved for future use: admin-managed blocked command patterns from DB (validator currently uses DANGEROUS_COMMANDS list)."""
+    """Admin-managed blocked patterns; validator uses DANGEROUS_COMMANDS for now."""
     __tablename__ = "blocked_commands"
     
     id = Column(Integer, primary_key=True, autoincrement=True)

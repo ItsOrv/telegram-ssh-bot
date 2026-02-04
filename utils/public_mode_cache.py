@@ -1,4 +1,4 @@
-"""In-memory cache for public_mode to reduce DB load on every callback."""
+"""Cache for public_mode."""
 import time
 from typing import Optional
 
@@ -8,7 +8,7 @@ CACHE_TTL_SECONDS = 45  # Refresh from DB at most every 45 seconds
 
 
 async def get_public_mode_cached() -> bool:
-    """Return public_mode, from cache if valid else from DB. Reduces DB queries significantly."""
+    """Return public_mode from cache or DB."""
     global _cache_value, _cache_time
     now = time.monotonic()
     if _cache_value is not None and _cache_time is not None and (now - _cache_time) < CACHE_TTL_SECONDS:
@@ -31,7 +31,7 @@ async def get_public_mode_cached() -> bool:
 
 
 def invalidate_public_mode_cache() -> None:
-    """Call after admin toggles public mode so next read gets fresh value."""
+    """Clear cache after admin toggles public mode."""
     global _cache_value, _cache_time
     _cache_value = None
     _cache_time = None

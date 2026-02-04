@@ -29,15 +29,14 @@ LAST_LINES_COUNT = 4  # Number of last lines to show in real-time output
 COMMAND_RATE_LIMIT_DIVISOR = 3  # Divisor for command rate limit (general_rate_limit / this)
 MIN_COMMAND_RATE_LIMIT = 10  # Minimum command executions per minute
 
-# Thread pool (keep low on limited RAM; increase via THREAD_POOL_MAX_WORKERS env if needed)
-THREAD_POOL_MAX_WORKERS = 15  # Default workers; set THREAD_POOL_MAX_WORKERS in .env for more
-MAX_CONCURRENT_SSH_CONNECTIONS = 10  # Maximum concurrent SSH connection attempts (semaphore limit)
+THREAD_POOL_MAX_WORKERS = 15
+MAX_CONCURRENT_SSH_CONNECTIONS = 10
 
 # Screen session
 SCREEN_SESSION_PREFIX = "sshbot_"  # Prefix for screen session names
 SCREEN_SESSION_HASH_LENGTH = 8  # Length of hash in screen session name
 
-# ConversationHandler user_data keys (for targeted cleanup instead of full clear)
+# conversation user_data keys
 ADD_SERVER_KEYS = ("new_server_name", "new_server_host", "new_server_port", "new_server_username", "new_server_password")
 DIRECT_CONNECT_KEYS = ("direct_host", "direct_port", "direct_username", "direct_password")
 EDIT_SERVER_KEYS = ("edit_server_id", "edit_field")

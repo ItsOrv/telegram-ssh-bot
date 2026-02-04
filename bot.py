@@ -398,7 +398,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cleanup_task(context):
     """Periodic cleanup task"""
     try:
-        # Run cleanup in thread to avoid blocking event loop
+        # run in thread
         await asyncio.to_thread(ssh_manager.cleanup_idle_connections)
         
         # Clean up old log files

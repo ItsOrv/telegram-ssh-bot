@@ -10,7 +10,7 @@ from utils.constants import (
 
 
 def clear_conversation_keys(context: ContextTypes.DEFAULT_TYPE, keys: tuple) -> None:
-    """Remove only conversation-specific keys from user_data (avoids wiping other state)."""
+    """Pop conversation keys from user_data."""
     for key in keys:
         context.user_data.pop(key, None)
 

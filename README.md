@@ -1,40 +1,14 @@
 # Telegram SSH Bot
 
-A professional Telegram bot for managing and executing commands on SSH servers remotely.
+Telegram bot to manage and run commands on SSH servers.
 
 ## Features
 
-### Server Management
-- ✅ Add new server with IP, username and password
-- ✅ View server list with details
-- ✅ Edit or delete server
-- ✅ Validate IP and login information before adding
-- ✅ Secure password encryption
-
-### Connection Management
-- ✅ Connect to a server from the list
-- ✅ Disconnect from current server
-- ✅ Manage single connection at a time
-- ✅ Display connection status
-- ✅ Auto-disconnect idle connections
-
-### Command Execution
-- ✅ Execute commands on connected server
-- ✅ Support for interactive commands
-- ✅ Receive output and errors
-- ✅ Validate and filter dangerous commands
-- ✅ Command length limits
-- ✅ Warn user on danger
-
-### Preset Commands
-- ✅ Add frequently used commands
-- ✅ Delete commands from list
-- ✅ View and quick execute commands
-
-### Access Control
-- ✅ Restrict access to admins (default)
-- ✅ Enable public mode
-- ✅ Each user has separate data
+- **Servers**: Add, edit, delete; IP/hostname and credentials validated; passwords stored encrypted.
+- **Connection**: One active connection per user; connect from list or direct; idle timeout.
+- **Commands**: Run commands on the connected server; interactive support; dangerous commands blocked; length limits.
+- **Presets**: Save and run frequent commands.
+- **Access**: Admin-only by default; optional public mode; data per user.
 
 ## Installation and Setup
 
@@ -157,13 +131,7 @@ python bot.py
 2. You can add frequently used commands
 3. For quick execution, use preset commands list
 
-### Performance and low-resource servers
-
-If the bot feels slow or the server has limited RAM/CPU:
-
-- **Thread pool**: Default is 15 workers. On a low-resource server keep it (or set `THREAD_POOL_MAX_WORKERS=8` in `.env`). On a powerful server you can set `THREAD_POOL_MAX_WORKERS=30` or higher.
-- **Database**: Runs on the same thread pool; public-mode checks are cached for ~45 seconds to reduce DB load.
-- **SSH**: Long-running commands hold a worker until they finish; avoid too many concurrent long commands.
+Tuning (slow bot or low RAM): see `PERFORMANCE.md`. You can set `THREAD_POOL_MAX_WORKERS` in `.env` (default 15).
 
 ### Public Mode
 
@@ -175,24 +143,7 @@ To enable bot for all users:
 
 ## Security
 
-### Security Features
-
-- **Password Encryption**: Passwords encrypted with AES-256-GCM
-- **Command Validation**: Dangerous commands are blocked
-- **Input Sanitization**: Suspicious characters are removed
-- **Length Limits**: Long commands are limited
-- **Rate Limiting**: Request rate limit per minute
-- **Timeout**: Command execution time limit
-- **Auto-disconnect**: Idle connections automatically closed
-
-### Blocked Commands
-
-The following commands are blocked by default:
-- `rm -rf /`
-- `format`
-- `mkfs`
-- `dd if=`
-- And other dangerous commands
+Passwords are encrypted (AES-256-GCM). Commands are validated and dangerous ones (e.g. `rm -rf /`, `mkfs`, `dd if=`) are blocked. Input is sanitized; rate limit and timeouts apply.
 
 ## Project Structure
 
@@ -269,16 +220,4 @@ RATE_LIMIT_PER_MINUTE=30         # Requests per minute
 
 ## License
 
-This project is released under MIT license.
-
-## Support
-
-For bug reports or suggestions, please create an Issue.
-
-## Important Notes
-
-- ⚠️ This bot is designed for use in secure environments
-- ⚠️ Always use strong passwords
-- ⚠️ Keep admin access limited
-- ⚠️ Regularly backup database
-- ⚠️ Keep rate limiting enabled if using publicly
+MIT.
